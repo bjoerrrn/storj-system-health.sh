@@ -22,9 +22,9 @@ tmp_rest_of_errors=$(docker logs --since "24h" storagenode 2>&1 | grep ERROR | g
 
 # select error messages in detail
 DLOG=""
-ERRS="$(docker logs --since '24h' --tail 40 storagenode 2>&1 | grep ERROR | grep -v -e 'collector' -e 'piecestore')"
-FATS="$(docker logs --since '24h' --tail 40 storagenode 2>&1 | grep FATAL)"
-AUDS="$(docker logs --since '24h' --tail 40 storagenode 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed')"
+ERRS="$(docker logs --since '24h' storagenode 2>&1 | grep ERROR | grep -v -e 'collector' -e 'piecestore')"
+FATS="$(docker logs --since '24h' storagenode 2>&1 | grep FATAL)"
+AUDS="$(docker logs --since '24h' storagenode 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed')"
 
 
 # concatenate status message
