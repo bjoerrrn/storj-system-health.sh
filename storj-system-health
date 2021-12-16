@@ -1,30 +1,48 @@
 #!/usr/bin/env bash
 
-# discord webhook url
-url='https://discord.com/api/webhooks/ .. < REPLACE WITH YOUR DISCORD WEBHOOK URL > .. '
+# define constants
+## discord webhook url
+URL='https://discord.com/api/webhooks/...'    # your discord webhook url
+## mail variables
+MAILFROM=""                                   # your "from:" mail address
+MAILTO=""                                     # your "to:" mail address
+MAILSERVER=""                                 # your smtp server address
+MAILUSER=""                                   # your user name from smtp server
+MAILPASS=""                                   # your password from smtp server
+MAILEOF=".. end of mail."
+## node data mount point
+MOUNTPOINT="/mnt/node"                        # your storage node mount point
+## storj node docker name
+NODENAME="storagenode"                        # your storagenode docker name
 
-# grab if debug param exists or not
-if [ $# -ge 1 ]
+
+# check if debug params exists or not
+if [ $# -ge 2 ]
+then
+	DEB=2
+	echo -e "mail debug mode on"
+elif [ $# -ge 1 ]
 then 
 	DEB=1
-	echo -e "debug flag on"
+	echo -e "discord debug mode on"
 else
 	DEB=0
-	echo -e "debug flag off"
+	echo -e "debug mode off"
 fi
 
+
 # count errors and grab disk usage
-tmp_disk_usage="$(df /mnt/storagenode | grep / | awk '{ print $5}' | sed 's/%//g')%" # .. REPLACE STORAGENODE WITH YOUR STORJ MOUNT POINT ..
-tmp_fatal_errors="$(docker logs --since 24h storagenode 2>&1 | grep 'FATAL' | grep -v -e 'INFO' -c)"
-tmp_audits_failed="$(docker logs --since 24h storagenode 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed' -c)"
-tmp_rest_of_errors="$(docker logs --since 24h storagenode 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore' -e 'emptying trash failed' -c)"
+tmp_disk_usage="$(df $MOUNTPOINT | grep / | awk '{ print $5}' | sed 's/%//g')%"
+tmp_fatal_errors="$(docker logs --since 24h $NODENAME 2>&1 | grep 'FATAL' | grep -v -e 'INFO' -c)"
+tmp_audits_failed="$(docker logs --since 24h $NODENAME 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed' -c)"
+tmp_rest_of_errors="$(docker logs --since 24h $NODENAME 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -c)"
 
 
 # select error messages in detail
 DLOG=""
-AUDS="$(docker logs --since 24h storagenode 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed')"
-FATS="$(docker logs --since 24h storagenode 2>&1 | grep 'FATAL' | grep -v 'INFO')"
-ERRS="$(docker logs --since 24h storagenode 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore' -e 'emptying trash failed')"
+AUDS="$(docker logs --since 24h $NODENAME 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed')"
+FATS="$(docker logs --since 24h $NODENAME 2>&1 | grep 'FATAL' | grep -v 'INFO')"
+ERRS="$(docker logs --since 24h $NODENAME 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled')"
 
 
 # concatenate status message
@@ -58,29 +76,44 @@ echo "$DLOG"
 
 # send discord ping
 if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_rest_of_errors -ne 0 ]] || [[ $tmp_audits_failed -ne 0 ]] || [[ $DEB -eq 1 ]]; then 
-        ./discord.sh --webhook-url=$url --username "storj stats" --text "$DLOG"
+        ./discord.sh --webhook-url="$URL" --username "storj stats" --text "$DLOG"
+        echo ".. discord push sent."
 fi
 
 
 # log excerpt echo
-echo "==="
-echo "ERRORS"
-echo "$ERRS"
-echo "==="
-echo "FATAL ERRORS"
-echo "$FATS"
-echo "==="
-echo "AUDIT"
-echo "$AUDS"
+if [[ $tmp_rest_of_errors -ne 0 ]]; then 
+	echo "==="
+	echo "ERRORS"
+	echo "$ERRS"
+fi
+if [[ $tmp_fatal_errors -ne 0 ]]; then 
+	echo "==="
+	echo "FATAL ERRORS"
+	echo "$FATS"
+fi
+if [[ $tmp_audits_failed -ne 0 ]]; then 
+	echo "==="
+	echo "AUDIT"
+	echo "$AUDS"
+fi
 
 
 # send email alerts
 if [[ $tmp_fatal_errors -ne 0 ]]; then 
-	swaks --from "<YOUR-FROM-EMAIL>" --to "<YOUR-TO-EMAIL>" --server "<YOUR-SMTP-SERVER>" --auth LOGIN --auth-user "<YOUR-SMTP-USER>" --auth-password "<YOUR-SMTP-PASSWORD>" --h-Subject "STORAGENODE : FATAL ERRORS FOUND" --body "$FATS .. end of fatal errors selection" --silent "1"
+	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : FATAL ERRORS FOUND" --body "$FATS $MAILEOF" --silent "1"
+	echo ".. fatal error mail sent."
 fi
 if [[ $tmp_rest_of_errors -ne 0 ]]; then 
-	swaks --from "<YOUR-FROM-EMAIL>" --to "<YOUR-TO-EMAIL>" --server "<YOUR-SMTP-SERVER>" --auth LOGIN --auth-user "<YOUR-SMTP-USER>" --auth-password "<YOUR-SMTP-PASSWORD>" --h-Subject "STORAGENODE : OTHER ERRORS FOUND" --body "$ERRS .. end of other errors selection" --silent "1"
+	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : OTHER ERRORS FOUND" --body "$ERRS $MAILEOF" --silent "1"
+	echo ".. general error mail sent."
 fi
 if [[ $tmp_audits_failed -ne 0 ]]; then 
-	swaks --from "<YOUR-FROM-EMAIL>" --to "<YOUR-TO-EMAIL>" --server "<YOUR-SMTP-SERVER>" --auth LOGIN --auth-user "<YOUR-SMTP-USER>" --auth-password "<YOUR-SMTP-PASSWORD>" --h-Subject "STORAGENODE : AUDIT ERRORS FOUND" --body "$AUDS .. end of audit errors selection" --silent "1"
+	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : AUDIT ERRORS FOUND" --body "$AUDS $MAILEOF" --silent "1"
+	echo ".. audit error mail sent."
+fi
+# send debug mail 
+if [[ $DEB -eq 2 ]]; then
+	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : DEBUG TEST MAIL" --body "blobb $MAILEOF" --silent "1"
+	echo ".. debut mail sent."
 fi
