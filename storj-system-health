@@ -15,16 +15,16 @@ fi
 
 # count errors and grab disk usage
 tmp_disk_usage="$(df /mnt/storagenode | grep / | awk '{ print $5}' | sed 's/%//g')%" # .. REPLACE STORAGENODE WITH YOUR STORJ MOUNT POINT ..
-tmp_fatal_errors=$(docker logs --since "24h" storagenode 2>&1 | grep "FATAL" -c)
-tmp_audits_failed=$(docker logs --since "24h" storagenode 2>&1 | grep -E "GET_AUDIT|GET_REPAIR" | grep "failed" -c)
-tmp_rest_of_errors=$(docker logs --since "24h" storagenode 2>&1 | grep ERROR | grep -v -e "collector" -e "piecestore" -c)
+tmp_fatal_errors="$(docker logs --since 24h storagenode 2>&1 | grep 'FATAL' | grep -v -e 'INFO' -c)"
+tmp_audits_failed="$(docker logs --since 24h storagenode 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed' -c)"
+tmp_rest_of_errors="$(docker logs --since 24h storagenode 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore' -c)"
 
 
 # select error messages in detail
 DLOG=""
-ERRS="$(docker logs --since '24h' storagenode 2>&1 | grep ERROR | grep -v -e 'collector' -e 'piecestore')" 
-FATS="$(docker logs --since '24h' storagenode 2>&1 | grep FATAL)"
-AUDS="$(docker logs --since '24h' storagenode 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed')"
+AUDS="$(docker logs --since 24h storagenode 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed')"
+FATS="$(docker logs --since 24h storagenode 2>&1 | grep 'FATAL' | grep -v 'INFO')"
+ERRS="$(docker logs --since 24h storagenode 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore')"
 
 
 # concatenate status message
