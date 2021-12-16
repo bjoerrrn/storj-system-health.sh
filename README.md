@@ -1,6 +1,27 @@
-# storjchecksnalerts
-checks if storage node runs into errors and reports disk usage: error counts pushed to discord and error details sent by email
+# storj-system-health.sh
 
-reuses the discord.sh script: https://github.com/ChaoticWeg/discord.sh
+## about this shell script
+this linux shell script checks, if a storage node (from the storj project) runs into errors and alerts the operator by discord pushes as well as emails, containg an excerpt of the relevant error log message. if the debug mode is used, it also informs about the disk usage of the mounted disk, which is used for the storj data storage. 
 
-how to create a discord webhook: https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks
+## references
+this tool re-uses the [discord.sh](https://github.com/ChaoticWeg/discord.sh) script. 
+
+## prerequisites
+in order to get notified by a discord push message, you need to setup a webhook on your discord server: [howto](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks)
+
+## automation
+this is a crontab example, which checks on a regular base each 15 mins and sends an informative summary each morning at 8 am. 
+```
+# Example of job definition:
+# .---------------- minute (0 - 59)
+# |  .------------- hour (0 - 23)
+# |  |  .---------- day of month (1 - 31)
+# |  |  |  .------- month (1 - 12) OR jan,feb,mar,apr ...
+# |  |  |  |  .---- day of week (0 - 6) (Sunday=0 or 7) OR sun,mon,tue,wed,thu,fri,sat
+# |  |  |  |  |
+# *  *  *  *  * user-name command to be executed
+...
+0  8    * * *   pi      /home/pi/storj-checks.sh debug
+*/15 *  * * *   pi      /home/pi/storj-checks.sh
+#
+```
