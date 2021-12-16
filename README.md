@@ -12,16 +12,6 @@ in order to get notified by a discord push message, you need to setup a webhook 
 ## automation
 this is a crontab example, which checks on a regular base each 15 mins and sends an informative summary each morning at 8 am. 
 ```
-# Example of job definition:
-# .---------------- minute (0 - 59)
-# |  .------------- hour (0 - 23)
-# |  |  .---------- day of month (1 - 31)
-# |  |  |  .------- month (1 - 12) OR jan,feb,mar,apr ...
-# |  |  |  |  .---- day of week (0 - 6) (Sunday=0 or 7) OR sun,mon,tue,wed,thu,fri,sat
-# |  |  |  |  |
-# *  *  *  *  * user-name command to be executed
-...
 0  8    * * *   pi      /home/pi/storj-checks.sh debug
 */15 *  * * *   pi      /home/pi/storj-checks.sh
-#
 ```
