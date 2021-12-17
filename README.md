@@ -4,13 +4,17 @@
 this linux shell script checks, if a storage node (from the storj project) runs into errors and alerts the operator by discord pushes as well as emails, containg an excerpt of the relevant error log message. if the debug mode is used, it also informs about the disk usage of the mounted disk, which is used for the storj data storage. 
 
 ## references
-this tool re-uses the [discord.sh](https://github.com/ChaoticWeg/discord.sh) script. 
+this tool uses the [discord.sh](https://github.com/ChaoticWeg/discord.sh) script to notify your discord channel. 
+
+it also makes use of specific values / selections from the [storj_success_rate.sh](https://github.com/ReneSmeekes/storj_success_rate) script, in order not to reinvent the wheel.
 
 ## prerequisites
-in order to get notified by a discord push message, you need to setup a webhook on your discord server: [howto](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks)
+to get notified by a discord push message, you need to setup a webhook on your discord server: [howto](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks). 
+
+you also need to have the [discord.sh](https://github.com/ChaoticWeg/discord.sh) script available in the same folder. 
 
 ## configuration
-you will need to modify the constants section for your specific node and smtp mail server configuration. here's an example to support you entering the right data:
+you will need to modify these variables for your specific node and smtp mail server configuration. here's an example to support you entering the right data:
 ```
                                               # your discord webhook url:
 URL='https://discord.com/api/webhooks/123456789012345678/ha1Sh3vA5lUe'
@@ -28,7 +32,7 @@ NODENAME="storagenode"                        # your storagenode docker name
 ```
 
 ## automation
-this is a crontab example, which checks on a regular base each 15 mins and sends an informative summary each morning at 8 am. 
+to let the health check run automatically, here's a crontab example, which runs the script each 15 mins and sends an informative summary each morning at 8 am. 
 ```
 0  8    * * *   pi      /home/pi/storj-checks.sh debug
 */15 *  * * *   pi      /home/pi/storj-checks.sh
