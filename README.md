@@ -30,19 +30,19 @@ you also need to have the [discord.sh](https://github.com/ChaoticWeg/discord.sh)
 ## configuration
 you will need to modify these variables for your specific node and smtp mail server configuration. here's an example to support you entering the right data:
 ```
-                                              # your discord webhook url:
+                               # your discord webhook url:
 URL='https://discord.com/api/webhooks/123456789012345678/ha1Sh3vA5lUe'
 
-MAILFROM="sender@gmail.com"                   # your "from:" mail address
-MAILTO="addressee@gmail.com"                  # your "to:" mail address
-MAILSERVER="smtp.server.com"                  # your smtp server address
-MAILUSER="user123"                            # your user name from smtp server
-MAILPASS="mypassword123!"                     # your password from smtp server
-MAILEOF=".. end of mail."                     # just a short text marking end of mail
+MAILFROM="sender@gmail.com"    # your "from:" mail address
+MAILTO="addressee@gmail.com"   # your "to:" mail address
+MAILSERVER="smtp.server.com"   # your smtp server address
+MAILUSER="user123"             # your user name from smtp server
+MAILPASS="mypassword123!"      # your password from smtp server
+MAILEOF=".. end of mail."      # just a short text marking end of mail
 
-MOUNTPOINT="/mnt/mynode"                      # your storage node mount point
+MOUNTPOINT="/mnt/mynode"       # your storage node mount point
 
-NODENAME="storagenode"                        # your storagenode docker name
+NODENAME="storagenode"         # your storagenode docker name
 ```
 
 ## automation
