@@ -45,6 +45,7 @@ FATS="$(docker logs --since 24h $NODENAME 2>&1 | grep 'FATAL' | grep -v 'INFO')"
 ERRS="$(docker logs --since 24h $NODENAME 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled')"
 
 
+
 # concatenate status message
 if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_rest_of_errors -eq 0 ]] && [[ $tmp_audits_failed -eq 0 ]]; then 
 	DLOG="**health check :** hdd $tmp_disk_usage; "
@@ -65,13 +66,37 @@ fi
 if [[ $tmp_audits_failed -eq 0 ]]; then
 	DLOG="$DLOG audit ok"
 else
-	DLOG="$DLOG **AUDIT ERRORS** ($tmp_audits_failed)"
+	DLOG="$DLOG **AUDIT ERRORS** ($tmp_audits_failed; recoverable: $audit_recfailrate; critical: $audit_failrate)"
 fi
 
 
 # dlog echo to terminal
 echo "==="
 echo "$DLOG"
+
+
+# in case of audit issues, select and share details (recoverable or critical)
+
+#count of successful audits
+audit_success=$($LOG 2>&1 | grep GET_AUDIT | grep downloaded -c)
+#count of recoverable failed audits
+audit_failed_warn=$($LOG 2>&1 | grep GET_AUDIT | grep failed | grep -v exist -c)
+audit_failed_warn_text=$($LOG 2>&1 | grep GET_AUDIT | grep failed | grep -v exist)
+#count of unrecoverable failed audits
+audit_failed_crit=$($LOG 2>&1 | grep GET_AUDIT | grep failed | grep exist -c)
+audit_failed_crit_text=$($LOG 2>&1 | grep GET_AUDIT | grep failed | grep exist)
+if [ $(($audit_success+$audit_failed_crit+$audit_failed_warn)) -ge 1 ]
+then
+	audit_recfailrate=$(printf '%.3f\n' $(echo -e "$audit_failed_warn $audit_success $audit_failed_crit" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+else
+	audit_recfailrate=0.000%
+fi
+if [ $(($audit_success+$audit_failed_crit+$audit_failed_warn)) -ge 1 ]
+then
+	audit_failrate=$(printf '%.3f\n' $(echo -e "$audit_failed_crit $audit_failed_warn $audit_success" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+else
+	audit_failrate=0.000%
+fi
 
 
 # send discord ping
@@ -109,11 +134,11 @@ if [[ $tmp_rest_of_errors -ne 0 ]]; then
 	echo ".. general error mail sent."
 fi
 if [[ $tmp_audits_failed -ne 0 ]]; then 
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : AUDIT ERRORS FOUND" --body "$AUDS $MAILEOF" --silent "1"
+	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : AUDIT ERRORS FOUND" --body "Recoverable: $audit_recfailrate \n\n$audit_failed_warn_text \n\nCritical: $audit_failrate \n\n$audit_failed_crit_text\n\nComplete: \n$AUDS \n\n$AUDS \n\n$MAILEOF" --silent "1"
 	echo ".. audit error mail sent."
 fi
 # send debug mail 
 if [[ $DEB -eq 2 ]]; then
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : DEBUG TEST MAIL" --body "blobb $MAILEOF" --silent "1"
+	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : DEBUG TEST MAIL" --body "blobb." --silent "1"
 	echo ".. debut mail sent."
 fi
