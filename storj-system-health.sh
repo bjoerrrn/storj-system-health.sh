@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 
-# define constants
+#
+# storj-system-health.sh - storagenode health checks and notifications to discord / by email
+# by dusselmann, https://github.com/dusselmann/storj-system-health.sh
+
+
+# define variables
 ## discord webhook url
 URL='https://discord.com/api/webhooks/...'    # your discord webhook url
 ## mail variables
