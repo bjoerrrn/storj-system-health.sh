@@ -1,10 +1,10 @@
 # storj-system-health.sh
 
 ## about this shell script
-this linux shell script checks, if a storage node (from the storj project) runs into errors and alerts the operator by discord pushes as well as emails, containg an excerpt of the relevant error log message. if the debug mode is used, it also informs about the disk usage of the mounted disk, which is used for the storj data storage. 
+this linux shell script checks, if a storage node (from the [storj](https://www.storj.io) project) runs into errors and alerts the operator by discord pushes as well as emails, containg an excerpt of the relevant error log message. if the debug mode is used, it also informs about the disk usage of the mounted disk, which is used for the storj data storage. 
 
 ## references
-this tool uses the [discord.sh](https://github.com/ChaoticWeg/discord.sh) script to notify your discord channel. 
+this tool uses the [discord.sh](https://github.com/ChaoticWeg/discord.sh) script to send push messages to your discord channel. 
 
 it also makes use of specific values / selections from the [storj_success_rate.sh](https://github.com/ReneSmeekes/storj_success_rate) script, in order not to reinvent the wheel.
 
