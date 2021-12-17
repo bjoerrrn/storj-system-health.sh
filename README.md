@@ -45,6 +45,12 @@ MOUNTPOINT="/mnt/mynode"       # your storage node mount point
 NODENAME="storagenode"         # your storagenode docker name
 ```
 
+make sure, your script is executable by running the following command. add 'sudo' at the beginning, if admin privileges are required. 
+```
+chmod u+x storj-system-health.sh  # or:
+sudo chmod u+x storj-system-health.sh
+```
+
 ## automation
 to let the health check run automatically, here’s a crontab example, which runs the script each 15 mins and sends an informative summary each morning at 8 am. 
 ```
