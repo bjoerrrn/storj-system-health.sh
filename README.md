@@ -32,8 +32,16 @@ NODENAME="storagenode"                        # your storagenode docker name
 ```
 
 ## automation
-to let the health check run automatically, here's a crontab example, which runs the script each 15 mins and sends an informative summary each morning at 8 am. 
+to let the health check run automatically, here’s a crontab example, which runs the script each 15 mins and sends an informative summary each morning at 8 am. 
 ```
 0  8    * * *   pi      /home/pi/storj-checks.sh debug
 */15 *  * * *   pi      /home/pi/storj-checks.sh
 ```
+
+## contributing
+
+pull requests are welcome. for major changes, please open an issue first to discuss what you would like to change.
+
+## license
+
+[GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.en.html)
