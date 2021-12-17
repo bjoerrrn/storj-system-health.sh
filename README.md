@@ -3,6 +3,20 @@
 ## about this shell script
 this linux shell script checks, if a storage node (from the [storj](https://www.storj.io) project) runs into errors and alerts the operator by discord pushes as well as emails, containg an excerpt of the relevant error log message. if the debug mode is used, it also informs about the disk usage of the mounted disk, which is used for the storj data storage. 
 
+## example screenshots
+
+an "ok" message
+
+![ok message](/examples/discord-example-all-fine.jpg)
+
+a message saying, that there are fatal errors
+
+![fatal error message](/examples/discord-example-fatal-error.jpg)
+
+another message saying, that there are general errors
+
+![fatal error message](/examples/discord-example-general-error.jpg)
+
 ## references
 this tool uses the [discord.sh](https://github.com/ChaoticWeg/discord.sh) script to send push messages to your discord channel. 
 
