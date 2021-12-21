@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 #
+# v1.3.0
+#
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
 # 
