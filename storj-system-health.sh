@@ -12,7 +12,7 @@
 renice 19 $$ 
 
 # =============================================================================
-# DEFINE CONSTANTS
+# DEFINE VARIABLES AND CONSTANTS
 # ------------------------------------
 
 ## discord webhook url
