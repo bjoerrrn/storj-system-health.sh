@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# v1.3.0
+# v1.3.1
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -108,13 +108,18 @@ if [[ $tmp_audits_failed -ne 0 ]]; then
 fi
 
 # ignore i/o timeouts (satellite service pings + single satellite connects), if audit success rate is 100% and there are no other errors as well
-
-ignore_rest_of_errors=true
-if [[ $tmp_rest_of_errors -ne 0 ]] && [[ $tmp_rest_of_errors -le $tmp_io_errors ]]; then 
-	if [[ $tmp_audits_failed -ne 0 ]]; then
+ignore_rest_of_errors=false
+if [[ $tmp_io_errors -ne 0 ]]; then
+	if [[ $tmp_rest_of_errors -eq $tmp_io_errors ]]; then
+		ignore_rest_of_errors=true
+	else
 		ignore_rest_of_errors=false
 	fi
-elif [[ $tmp_rest_of_errors -ne 0 ]]; then
+else
+	ignore_rest_of_errors=false
+fi
+# never ignore in case of audit issues
+if [[ $tmp_audits_failed -ne 0 ]]; then
 	ignore_rest_of_errors=false
 fi
 
@@ -283,7 +288,15 @@ if [[ $tmp_fatal_errors -ne 0 ]]; then
 	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : FATAL ERRORS FOUND" --body "$FATS $MAILEOF" --silent "1"
 	echo ".. fatal error mail sent."
 fi
-if [[ $tmp_rest_of_errors -ne 0 ]]; then 
+if [[ $tmp_rest_of_errors -ne 0 ]]; then
+	if [[ $ignore_rest_of_errors ]]; then
+		if [[ $DEB -eq 1 ]]; then
+			swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : OTHER ERRORS FOUND" --body "$ERRS $MAILEOF" --silent "1"
+			echo ".. general error mail sent."
+		fi
+	fi
+fi
+if [[ $tmp_rest_of_errors -ne 0 ]] && [[ "$ignore_rest_of_errors" = false ]]; then
 	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : OTHER ERRORS FOUND" --body "$ERRS $MAILEOF" --silent "1"
 	echo ".. general error mail sent."
 fi
