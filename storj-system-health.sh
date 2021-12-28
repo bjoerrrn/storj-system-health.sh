@@ -1,15 +1,62 @@
 #!/usr/bin/env bash
 #
-# v1.3.1
+# v1.3.2
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
+# This script is licensed under GNU GPL version 3.0 or above
 # 
 # > requires discord.sh from https://github.com/ChaoticWeg/discord.sh
 # > uses parts of storj_success_rate from https://github.com/ReneSmeekes/storj_success_rate
+# 
+# -------------------------------------------------------------------------
+
+# check for jq
+
+jq --version >/dev/null 2>&1
+jq_ok=$?
+
+[[ "$jq_ok" -eq 127 ]] && \
+    echo "fatal: jq not installed" && exit 2
+[[ "$jq_ok" -ne 0 ]] && \
+    echo "fatal: unknown error in jq" && exit 2
+
+# jq exists and runs ok
+
+
+# check for curl
+curl --version >/dev/null 2>&1
+curl_ok=$?
+
+[[ "$curl_ok" -eq 127 ]] && \
+    echo "fatal: curl not installed" && exit 2
+# curl exists and runs ok
+
+
+# check for swaks
+swaks --version >/dev/null 2>&1
+swaks_ok=$?
+
+[[ "$swaks_ok" -eq 127 ]] && \
+    echo "fatal: swaks not installed" && exit 2
+# swaks exists and runs ok
+
+
+
+help_text="Usage: storj-system-health.sh [OPTIONS]
+
+General options:
+  --help                         Display this help and exit"
+  
+# HELP TEXT PLEASE
+# [[ "$#" -eq 0 ]] && echo "$help_text" && exit 0
+[[ "${1}" == "help" ]] && echo "$help_text" && exit 0
+[[ "${1}" == "--help" ]] && echo "$help_text" && exit 0
+
 
 # let the script run in low performance to not block the system
 renice 19 $$ 
+
 
 # =============================================================================
 # DEFINE VARIABLES AND CONSTANTS
@@ -65,6 +112,7 @@ fi
 
 ### > check if storagenode is runnning; if not, cancel analysis and push / email alert
 if [[ $RUNNING -eq 1 ]]; then
+# (if statement is closed at the end of this script)
 
 
 # =============================================================================
@@ -122,7 +170,6 @@ fi
 if [[ $tmp_audits_failed -ne 0 ]]; then
 	ignore_rest_of_errors=false
 fi
-
 
 
 ## download stats
@@ -240,18 +287,6 @@ fi
 
 
 # =============================================================================
-# SEND THE PUSH MESSAGE TO DISCORD
-# ------------------------------------
-
-# send discord ping
-if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_rest_of_errors -ne 0 ]] || [[ $tmp_audits_failed -ne 0 ]] || [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]] || [[ $DEB -eq 1 ]]; then 
-        ./discord.sh --webhook-url="$URL" --username "storj stats" --text "$DLOG"
-        echo ".. discord push sent."
-fi
-
-
-
-# =============================================================================
 # ECHO OUTPUT IN CASE COMMAND LINE USAGE (in debug modes)
 # ------------------------------------
 
@@ -279,6 +314,21 @@ if [[ $DEB -ne 0 ]]; then
 fi
 
 
+
+# =============================================================================
+# SEND THE PUSH MESSAGE TO DISCORD
+# ------------------------------------
+
+# send discord ping
+if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_rest_of_errors -ne 0 ]] || [[ $tmp_audits_failed -ne 0 ]] || [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]] || [[ $DEB -eq 1 ]]; then 
+        ./discord.sh --webhook-url="$URL" --username "storj stats" --text "$DLOG"
+        echo ".. discord push sent."
+fi
+
+
+
+
+
 # =============================================================================
 # SEND EMAIL ALERTS WITH ERROR DETAILS (and debug mail to verify mail works)
 # ------------------------------------
@@ -292,13 +342,13 @@ if [[ $tmp_rest_of_errors -ne 0 ]]; then
 	if [[ $ignore_rest_of_errors ]]; then
 		if [[ $DEB -eq 1 ]]; then
 			swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : OTHER ERRORS FOUND" --body "$ERRS $MAILEOF" --silent "1"
-			echo ".. general error mail sent."
+			echo ".. general error mail sent (ignore: $ignore_rest_of_errors)."
 		fi
 	fi
 fi
 if [[ $tmp_rest_of_errors -ne 0 ]] && [[ "$ignore_rest_of_errors" = false ]]; then
 	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : OTHER ERRORS FOUND" --body "$ERRS $MAILEOF" --silent "1"
-	echo ".. general error mail sent."
+	echo ".. general error mail sent (ignore: $ignore_rest_of_errors)."
 fi
 if [[ $tmp_audits_failed -ne 0 ]]; then 
 	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : AUDIT ERRORS FOUND" --body "Recoverable: $audit_recfailrate \n\n$audit_failed_warn_text \n\nCritical: $audit_failrate \n\n$audit_failed_crit_text\n\nComplete: \n$AUDS \n\n$AUDS \n\n$MAILEOF" --silent "1"
