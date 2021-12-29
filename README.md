@@ -1,7 +1,15 @@
 # storj-system-health.sh
 
 ## about this shell script
-this linux shell script checks, if a storage node (from the [storj](https://www.storj.io) project) runs into errors and alerts the operator by discord pushes as well as emails, containg an excerpt of the relevant error log message. if the debug mode is used, it also informs about the disk usage of the mounted disk, which is used for the storj data storage. 
+this linux shell script checks, if a storage node (from the [storj](https://www.storj.io) project) runs into errors and alerts the operator by discord push messages as well as emails. 
+
+**list of features:**
+* emails containg an excerpt of the relevant error log message
+* if the debug mode is used, disk usage of the mounted data storage disk mount point
+* alerts in case a threshold of repair gets/puts and downloads/uploads are reached 
+* alerts if there was no get/put at all in the last hour
+* alerts in case the node is offline (docker container not started)
+* optimized for crontab and command line usage
 
 ## example screenshots
 
@@ -17,15 +25,17 @@ another message saying, that there are general errors
 
 ![fatal error message](/examples/discord-example-general-error.jpg)
 
-## references
+## dependencies
 this tool uses the [discord.sh](https://github.com/ChaoticWeg/discord.sh) script to send push messages to your discord channel. 
 
 it also makes use of specific values / selections from the [storj_success_rate.sh](https://github.com/ReneSmeekes/storj_success_rate) script, in order not to reinvent the wheel.
 
+the jq, swaks and curl libraries are required as well. 
+
 ## prerequisites
 to get notified by a discord push message, you need to setup a webhook on your discord server: [howto](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks). 
 
-you also need to have the [discord.sh](https://github.com/ChaoticWeg/discord.sh) script available in the same folder. 
+you also need to have the [discord.sh](https://github.com/ChaoticWeg/discord.sh) script available and executable in the same folder. 
 
 ## configuration
 you will need to modify these variables for your specific node and smtp mail server configuration. here's an example to support you entering the right data:
@@ -51,11 +61,25 @@ chmod u+x storj-system-health.sh  # or:
 sudo chmod u+x storj-system-health.sh
 ```
 
-## automation
-to let the health check run automatically, here’s a crontab example, which runs the script each 15 mins and sends an informative summary each morning at 8 am. 
+## usage
+
+you can run the script in debug mode to force a push message to your discord channel although no error was found - or without the debug flag to run it in silent mode via crontab (see automation chapter).
+
 ```
-0  8    * * *   pi      /home/pi/storj-checks.sh debug
-*/15 *  * * *   pi      /home/pi/storj-checks.sh
+./storj-system-health.sh debug # for a regular discord push message or:
+./storj-system-health.sh # for silent mode
+```
+
+it also supports a help command. more commands will be implemented over time.
+
+```
+./storj-system-health.sh --help
+```
+
+## automation with crontab
+to let the health check run automatically, here’s a crontab example, which runs the script each hour: 
+```
+0  *    * * *   pi      /home/pi/storj-checks.sh debug
 ```
 
 ## contributing
