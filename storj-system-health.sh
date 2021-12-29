@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# v1.3.2
+# v1.3.3
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -73,15 +73,17 @@ MAILPASS=""                                   # your password from smtp server
 MAILEOF=".. end of mail."
 ## node data mount point
 MOUNTPOINT="/mnt/node"                        # your storage node mount point
-## storj node docker name
-NODENAME="storagenode"                        # your storagenode docker name
 
-# docker log selection from the last 24 hours
-LOG="docker logs --since "$(date -d "$date -1 day" +"%Y-%m-%dT%H:%M")" $NODENAME"
-LOG1H="docker logs --since "$(date -d "$date -1 hour" +"%Y-%m-%dT%H:%M")" $NODENAME"
+## storj node docker name
+NODENAME="storagenode"
+
+# docker log selection from the last 24 hours and 1 hour
+LOG1D="$(docker logs --since "$(date -d "$date -1 day" +"%Y-%m-%dT%H:%M")" $NODENAME 2>&1)"
+echo ".. docker log 1d selected."
+LOG1H="$(docker logs --since "$(date -d "$date -1 hour" +"%Y-%m-%dT%H:%M")" $NODENAME 2>&1)"
+echo ".. docker log 1h selected."
 
 RUNNING="$(docker ps | grep 'storagenode' -c)"
-echo $RUNNING
 
 audit_success=0
 audit_failed_warn=0
@@ -99,14 +101,14 @@ audit_failrate=0.000%
 if [ $# -ge 2 ]
 then
 	DEB=2
-	echo -e "mail debug mode on"
+	echo -e ".. mail debug mode on"
 elif [ $# -ge 1 ]
 then 
 	DEB=1
-	echo -e "discord debug mode on"
+	echo -e ".. discord debug mode on"
 else
 	DEB=0
-	echo -e "debug mode off"
+	echo -e ".. debug mode off"
 fi
 
 
@@ -119,32 +121,39 @@ if [[ $RUNNING -eq 1 ]]; then
 # SELECT USAGE, ERROR COUNTERS AND ERROR MESSAGES
 # ------------------------------------
 
-# count errors and grab (real) disk usage (not from strogenode calculations
-tmp_disk_usage="$(df $MOUNTPOINT | grep / | awk '{ print $5}' | sed 's/%//g')%"
-tmp_fatal_errors="$(docker logs --since 24h $NODENAME 2>&1 | grep 'FATAL' | grep -v -e 'INFO' -c)"
-tmp_audits_failed="$(docker logs --since 24h $NODENAME 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed' -c)"
-tmp_rest_of_errors="$(docker logs --since 24h $NODENAME 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -c)"
-tmp_io_errors="$(docker logs --since 24h $NODENAME 2>&1 | grep 'ERROR' | grep -e 'i/o timeout' | grep -e 'unable to connect to the satellite' -e 'service ping satellite failed' -c)"
-
-
 # select error messages in detail (partially extracted text log)
 DLOG=""
-AUDS="$(docker logs --since 24h $NODENAME 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed')"
-FATS="$(docker logs --since 24h $NODENAME 2>&1 | grep 'FATAL' | grep -v 'INFO')"
-ERRS="$(docker logs --since 24h $NODENAME 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled')"
+#INFO="$(echo "$LOG1H" 2>&1 | grep 'INFO' | grep -v -e 'FATAL' -e 'ERROR')"
+AUDS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed')"
+FATS="$(echo "$LOG1H" 2>&1 | grep 'FATAL' | grep -v 'INFO')"
+ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled')"
+
+# count errors and grab (real) disk usage (not from strogenode calculations
+tmp_disk_usage="$(df $MOUNTPOINT | grep / | awk '{ print $5}' | sed 's/%//g')%"
+#tmp_info="$(echo "$INFO" 2>&1 | grep 'INFO' -c)"
+tmp_fatal_errors="$(echo "$FATS" 2>&1 | grep 'FATAL' -c)"
+tmp_audits_failed="$(echo "$AUDS" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed' -c)"
+tmp_rest_of_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' -c)"
+tmp_io_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' | grep -e 'i/o timeout' | grep -e 'unable to connect to the satellite' -e 'service ping satellite failed' -c)"
+
+#echo "info $tmp_info"
+echo ".. audit error count : $tmp_audits_failed"
+echo ".. fatal error count : $tmp_fatal_errors"
+echo ".. other error count : $tmp_rest_of_errors"
+echo ".. i/o timouts count : $tmp_io_errors"
 
 
 ## in case of audit issues, select and share details (recoverable or critical)
 # ------------------------------------
 if [[ $tmp_audits_failed -ne 0 ]]; then 
 	#count of successful audits
-	audit_success=$($LOG 2>&1 | grep GET_AUDIT | grep downloaded -c)
+	audit_success=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep downloaded -c)
 	#count of recoverable failed audits
-	audit_failed_warn=$($LOG 2>&1 | grep GET_AUDIT | grep failed | grep -v exist -c)
-	audit_failed_warn_text=$($LOG 2>&1 | grep GET_AUDIT | grep failed | grep -v exist)
+	audit_failed_warn=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep failed | grep -v exist -c)
+	audit_failed_warn_text=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep failed | grep -v exist)
 	#count of unrecoverable failed audits
-	audit_failed_crit=$($LOG 2>&1 | grep GET_AUDIT | grep failed | grep exist -c)
-	audit_failed_crit_text=$($LOG 2>&1 | grep GET_AUDIT | grep failed | grep exist)
+	audit_failed_crit=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep failed | grep exist -c)
+	audit_failed_crit_text=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep failed | grep exist)
 	if [ $(($audit_success+$audit_failed_crit+$audit_failed_warn)) -ge 1 ]
 	then
 		audit_recfailrate=$(printf '%.3f\n' $(echo -e "$audit_failed_warn $audit_success $audit_failed_crit" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
@@ -154,6 +163,89 @@ if [[ $tmp_audits_failed -ne 0 ]]; then
 		audit_failrate=$(printf '%.3f\n' $(echo -e "$audit_failed_crit $audit_failed_warn $audit_success" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
 	fi
 fi
+echo ".. stats selected : audits"
+
+
+## download stats
+# ------------------------------------
+
+#count of successful downloads
+dl_success=$(echo "$LOG1D" 2>&1 | grep '"GET"' | grep 'downloaded' -c)
+#canceled Downloads from your node
+dl_canceled=$(echo "$LOG1D" 2>&1 | grep '"GET"' | grep 'download canceled' -c)
+#Failed Downloads from your node
+dl_failed=$(echo "$LOG1D" 2>&1 | grep '"GET"' | grep 'download failed' -c)
+#Ratio of Successful Downloads
+get_ratio_int=0
+if [ $(($dl_success+$dl_failed+$dl_canceled)) -ge 1 ]
+then
+	get_ratio_int=$(printf '%.0f\n' $(echo -e "$dl_success $dl_failed $dl_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))
+fi
+echo ".. stats selected : downloads"
+
+
+## upload stats
+# ------------------------------------
+
+#count of successful uploads to your node
+put_success=$(echo "$LOG1D" 2>&1 | grep '"PUT"' | grep uploaded -c)
+#count of rejected uploads to your node
+put_rejected=$(echo "$LOG1D" 2>&1 | grep 'upload rejected' -c)
+#count of canceled uploads to your node
+put_canceled=$(echo "$LOG1D" 2>&1 | grep '"PUT"' | grep 'upload canceled' -c)
+#count of failed uploads to your node
+put_failed=$(echo "$LOG1D" 2>&1 | grep '"PUT"' | grep 'upload failed' -c)
+#Ratio of Success
+put_ratio_int=0
+if [ $(($put_success+$put_canceled+$put_failed)) -ge 1 ]
+then
+	put_ratio_int=$(printf '%.0f\n' $(echo -e "$put_success $put_failed $put_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))
+fi
+echo ".. stats selected : uploads"
+
+
+## repair download & upload stats
+# ------------------------------------
+
+#count of successful downloads of pieces for repair process
+get_repair_success=$(echo "$LOG1D" 2>&1 | grep GET_REPAIR | grep downloaded -c)
+#count of failed downloads of pieces for repair process
+get_repair_failed=$(echo "$LOG1D" 2>&1 | grep GET_REPAIR | grep 'download failed' -c)
+#count of canceled downloads of pieces for repair process
+get_repair_canceled=$(echo "$LOG1D" 2>&1 | grep GET_REPAIR | grep 'download canceled' -c)
+#Ratio of Success GET_REPAIR
+get_repair_ratio_int=0
+if [ $(($get_repair_success+$get_repair_failed+$get_repair_canceled)) -ge 1 ]
+then
+	get_repair_ratio_int=$(printf '%.0f\n' $(echo -e "$get_repair_success $get_repair_failed $get_repair_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))
+fi
+echo ".. stats selected : repair downloads"
+
+#count of successful uploads of repaired pieces
+put_repair_success=$(echo "$LOG1D" 2>&1 | grep PUT_REPAIR | grep uploaded -c)
+#count of canceled uploads repaired pieces
+put_repair_canceled=$(echo "$LOG1D" 2>&1 | grep PUT_REPAIR | grep 'upload canceled' -c)
+#count of failed uploads repaired pieces
+put_repair_failed=$(echo "$LOG1D" 2>&1 | grep PUT_REPAIR | grep 'upload failed' -c)
+#Ratio of Success PUT_REPAIR
+put_repair_ratio_int=0
+if [ $(($put_repair_success+$put_repair_failed+$put_repair_canceled)) -ge 1 ]
+then
+	put_repair_ratio_int=$(printf '%.0f\n' $(echo -e "$put_repair_success $put_repair_failed $put_repair_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))
+fi
+echo ".. stats selected : repair uploads"
+
+
+## count upload and download activity last hour
+# ------------------------------------
+
+gets_recent_hour=$(echo "$LOG1H" 2>&1 | grep '"GET"' -c)
+puts_recent_hour=$(echo "$LOG1H" 2>&1 | grep '"PUT"' -c)
+tmp_no_getput_1h=false
+[[ $gets_recent_hour -eq 0 ]] && tmp_no_getput_1h=true
+[[ $puts_recent_hour -eq 0 ]] && tmp_no_getput_1h=true
+echo ".. stats selected : 1h activity (no activity : $tmp_no_getput_1h)"
+
 
 # ignore i/o timeouts (satellite service pings + single satellite connects), if audit success rate is 100% and there are no other errors as well
 ignore_rest_of_errors=false
@@ -170,80 +262,7 @@ fi
 if [[ $tmp_audits_failed -ne 0 ]]; then
 	ignore_rest_of_errors=false
 fi
-
-
-## download stats
-# ------------------------------------
-
-#count of successful downloads
-dl_success=$($LOG 2>&1 | grep '"GET"' | grep 'downloaded' -c)
-#canceled Downloads from your node
-dl_canceled=$($LOG 2>&1 | grep '"GET"' | grep 'download canceled' -c)
-#Failed Downloads from your node
-dl_failed=$($LOG 2>&1 | grep '"GET"' | grep 'download failed' -c)
-#Ratio of Successful Downloads
-get_ratio_int=0
-if [ $(($dl_success+$dl_failed+$dl_canceled)) -ge 1 ]
-then
-	get_ratio_int=$(printf '%.0f\n' $(echo -e "$dl_success $dl_failed $dl_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))
-fi
-
-
-## upload stats
-# ------------------------------------
-
-#count of successful uploads to your node
-put_success=$($LOG 2>&1 | grep '"PUT"' | grep uploaded -c)
-#count of rejected uploads to your node
-put_rejected=$($LOG 2>&1 | grep 'upload rejected' -c)
-#count of canceled uploads to your node
-put_canceled=$($LOG 2>&1 | grep '"PUT"' | grep 'upload canceled' -c)
-#count of failed uploads to your node
-put_failed=$($LOG 2>&1 | grep '"PUT"' | grep 'upload failed' -c)
-#Ratio of Success
-put_ratio_int=0
-if [ $(($put_success+$put_canceled+$put_failed)) -ge 1 ]
-then
-	put_ratio_int=$(printf '%.0f\n' $(echo -e "$put_success $put_failed $put_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))
-fi
-
-
-## repair download & upload stats
-# ------------------------------------
-
-#count of successful downloads of pieces for repair process
-get_repair_success=$($LOG 2>&1 | grep GET_REPAIR | grep downloaded -c)
-#count of failed downloads of pieces for repair process
-get_repair_failed=$($LOG 2>&1 | grep GET_REPAIR | grep 'download failed' -c)
-#count of canceled downloads of pieces for repair process
-get_repair_canceled=$($LOG 2>&1 | grep GET_REPAIR | grep 'download canceled' -c)
-#Ratio of Success GET_REPAIR
-get_repair_ratio_int=0
-if [ $(($get_repair_success+$get_repair_failed+$get_repair_canceled)) -ge 1 ]
-then
-	get_repair_ratio_int=$(printf '%.0f\n' $(echo -e "$get_repair_success $get_repair_failed $get_repair_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))
-fi
-
-#count of successful uploads of repaired pieces
-put_repair_success=$($LOG 2>&1 | grep PUT_REPAIR | grep uploaded -c)
-#count of canceled uploads repaired pieces
-put_repair_canceled=$($LOG 2>&1 | grep PUT_REPAIR | grep 'upload canceled' -c)
-#count of failed uploads repaired pieces
-put_repair_failed=$($LOG 2>&1 | grep PUT_REPAIR | grep 'upload failed' -c)
-#Ratio of Success PUT_REPAIR
-put_repair_ratio_int=0
-if [ $(($put_repair_success+$put_repair_failed+$put_repair_canceled)) -ge 1 ]
-then
-	put_repair_ratio_int=$(printf '%.0f\n' $(echo -e "$put_repair_success $put_repair_failed $put_repair_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))
-fi
-
-
-## count upload and download activity last hour
-# ------------------------------------
-
-gets_recent_hour=$($LOG1H 2>&1 | grep '"GET"' -c)
-puts_recent_hour=$($LOG1H 2>&1 | grep '"PUT"' -c)
-
+echo ".. stats selected : i/o timouts > other errors ignored : $ignore_rest_of_errors"
 
 
 # =============================================================================
@@ -257,7 +276,11 @@ else
 fi
 
 if [[ $tmp_fatal_errors -eq 0 ]] && [[ $ignore_rest_of_errors ]]; then 
-	DLOG="$DLOG no errors;"
+	DLOG="$DLOG no errors"
+	if [[ $tmp_io_errors -ne 0 ]]; then 
+		DLOG="$DLOG (skipped io)"
+	fi
+	DLOG="$DLOG;"
 elif [[ $tmp_fatal_errors -eq 0 ]]; then
 	DLOG="$DLOG **ERRORS FOUND** ($tmp_rest_of_errors);"
 elif [[ $ignore_rest_of_errors ]]; then
@@ -274,16 +297,17 @@ fi
 
 
 if [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]]; then
-	DLOG="$DLOG; !! rep stats below threshold !! ($get_repair_ratio_int/$put_repair_ratio_int: risk of getting disqualified)"
+	DLOG="$DLOG; \nattention !! repair stats below threshold (download $get_repair_ratio_int / upload $put_repair_ratio_int: risk of getting disqualified)"
 fi
 
 if [[ $gets_recent_hour -eq 0 ]] && [[ $puts_recent_hour -eq 0 ]]; then
-	DLOG="$DLOG; !! no get/put - beware !!"
+	DLOG="$DLOG; \nattention !! no get/put in last 1h - beware"
 fi
 
 if [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]]; then
-	DLOG="$DLOG; !! get/put success ratio below threshold - beware ($get_ratio_int/$put_ratio_int) !!"
+	DLOG="$DLOG; \nattention !! get/put success ratio below threshold - beware (download $get_ratio_int / upload $put_ratio_int)"
 fi
+echo ".. alert message prepared:"
 
 
 # =============================================================================
@@ -320,13 +344,10 @@ fi
 # ------------------------------------
 
 # send discord ping
-if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_rest_of_errors -ne 0 ]] || [[ $tmp_audits_failed -ne 0 ]] || [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]] || [[ $DEB -eq 1 ]]; then 
+if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_rest_of_errors -ne 0 ]] || [[ $tmp_audits_failed -ne 0 ]] || [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]] || [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]] || [[ $tmp_no_getput_1h ]] || [[ $DEB -eq 1 ]]; then 
         ./discord.sh --webhook-url="$URL" --username "storj stats" --text "$DLOG"
         echo ".. discord push sent."
 fi
-
-
-
 
 
 # =============================================================================
@@ -344,11 +365,10 @@ if [[ $tmp_rest_of_errors -ne 0 ]]; then
 			swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : OTHER ERRORS FOUND" --body "$ERRS $MAILEOF" --silent "1"
 			echo ".. general error mail sent (ignore: $ignore_rest_of_errors)."
 		fi
+	else
+		swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : OTHER ERRORS FOUND" --body "$ERRS $MAILEOF" --silent "1"
+		echo ".. general error mail sent (ignore: $ignore_rest_of_errors)."
 	fi
-fi
-if [[ $tmp_rest_of_errors -ne 0 ]] && [[ "$ignore_rest_of_errors" = false ]]; then
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : OTHER ERRORS FOUND" --body "$ERRS $MAILEOF" --silent "1"
-	echo ".. general error mail sent (ignore: $ignore_rest_of_errors)."
 fi
 if [[ $tmp_audits_failed -ne 0 ]]; then 
 	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : AUDIT ERRORS FOUND" --body "Recoverable: $audit_recfailrate \n\n$audit_failed_warn_text \n\nCritical: $audit_failrate \n\n$audit_failed_crit_text\n\nComplete: \n$AUDS \n\n$AUDS \n\n$MAILEOF" --silent "1"
