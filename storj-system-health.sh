@@ -269,32 +269,27 @@ echo ".. stats selected : i/o timouts > other errors ignored : $ignore_rest_of_e
 # CONCATENATE THE PUSH MESSAGE
 # ------------------------------------
 
-if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq 0 ]] && [[ $tmp_rest_of_errors -eq 0 ]] && [[ $tmp_audits_failed -eq 0 ]]; then 
-	DLOG="**health check :** hdd $tmp_disk_usage;"
+if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]] && [[ $tmp_audits_failed -eq 0 ]]; then 
+	DLOG="**health check :** hdd $tmp_disk_usage; OK"
 else
 	DLOG="**warning :**"
 fi
 
-if [[ $tmp_fatal_errors -eq 0 ]] && $ignore_rest_of_errors; then 
-	DLOG="$DLOG no errors"
-	if [[ $tmp_io_errors -ne 0 ]]; then 
+if [[ $tmp_audits_failed -ne 0 ]]; then
+	DLOG="$DLOG **AUDIT ERRORS** ($tmp_audits_failed; recoverable: $audit_recfailrate; critical: $audit_failrate);"
+fi
+
+if [[ $tmp_fatal_errors -ne 0 ]]; then
+	DLOG="$DLOG **FATAL ERRORS** ($tmp_fatal_errors);"
+fi
+
+if [[ $tmp_rest_of_errors -ne 0 ]]; then
+	if [[ $tmp_io_errors -ne $tmp_rest_of_errors ]]; then
+		DLOG="$DLOG **ERRORS FOUND** ($tmp_rest_of_errors);"
+	else
 		DLOG="$DLOG (skipped io)"
 	fi
-	DLOG="$DLOG;"
-elif [[ $tmp_fatal_errors -eq 0 ]]; then
-	DLOG="$DLOG **ERRORS FOUND** ($tmp_rest_of_errors);"
-elif $ignore_rest_of_errors; then
-	DLOG="$DLOG **FATAL ERRORS** ($tmp_fatal_errors);"
-else
-    DLOG="$DLOG **FATAL /+ ERRORS** ($tmp_fatal_errors/$tmp_rest_of_errors);"
 fi
-
-if [[ $tmp_audits_failed -eq 0 ]]; then
-	DLOG="$DLOG audit ok"
-else
-	DLOG="$DLOG **AUDIT ERRORS** ($tmp_audits_failed; recoverable: $audit_recfailrate; critical: $audit_failrate)"
-fi
-
 
 if [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]]; then
 	DLOG="$DLOG; \nattention !! repair stats below threshold (download $get_repair_ratio_int / upload $put_repair_ratio_int: risk of getting disqualified)"
@@ -344,7 +339,7 @@ fi
 # ------------------------------------
 
 # send discord ping
-if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_rest_of_errors -ne 0 ]] || [[ $tmp_audits_failed -ne 0 ]] || [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]] || [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]] || [[ $tmp_no_getput_1h ]] || [[ $DEB -eq 1 ]]; then 
+if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_io_errors -ne $tmp_rest_of_errors ]] || [[ $tmp_audits_failed -ne 0 ]] || [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]] || [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]] || [[ $tmp_no_getput_1h ]] || [[ $DEB -eq 1 ]]; then 
         ./discord.sh --webhook-url="$URL" --username "storj stats" --text "$DLOG"
         echo ".. discord push sent."
 fi
