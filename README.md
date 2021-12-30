@@ -4,6 +4,8 @@
 this linux shell script checks, if a storage node (from the [storj](https://www.storj.io) project) runs into errors and alerts the operator by discord push messages as well as emails. 
 
 **list of features:**
+* multinode support
+* optionally discord and/or mail alerts
 * emails containg an excerpt of the relevant error log message
 * if the debug mode is used, disk usage of the mounted data storage disk mount point
 * alerts in case a threshold of repair gets/puts and downloads/uploads are reached 
@@ -40,19 +42,29 @@ you also need to have the [discord.sh](https://github.com/ChaoticWeg/discord.sh)
 ## configuration
 you will need to modify these variables for your specific node and smtp mail server configuration. here's an example to support you entering the right data:
 ```
-                               # your discord webhook url:
-URL='https://discord.com/api/webhooks/123456789012345678/ha1Sh3vA5lUe'
+## discord settings
+DISCORDON=true			# enables (true) or disables (false) discord pushes
+URL='https://discord.com/api/webhooks/...' 
+				# your discord webhook url
 
-MAILFROM="sender@gmail.com"    # your "from:" mail address
-MAILTO="addressee@gmail.com"   # your "to:" mail address
-MAILSERVER="smtp.server.com"   # your smtp server address
-MAILUSER="user123"             # your user name from smtp server
-MAILPASS="mypassword123!"      # your password from smtp server
-MAILEOF=".. end of mail."      # just a short text marking end of mail
+## mail settings
+MAILON=true			# enables (true) or disables (false) email messages
+MAILFROM=""                     # your "from:" mail address
+MAILTO=""                       # your "to:" mail address
+MAILSERVER=""                   # your smtp server address
+MAILUSER=""                     # your user name from smtp server
+MAILPASS=""                     # your password from smtp server
 
-MOUNTPOINT="/mnt/mynode"       # your storage node mount point
+## node data mount point
+MOUNTPOINT="/mnt/node"          # your storage node mount point
 
-NODENAME="storagenode"         # your storagenode docker name
+## storj node docker names
+## in case multinodes are used, just add them es separate strings
+NODES=(
+	"storagenode"
+	#"storagenode-2"
+	#"storagenode-3"
+)
 ```
 
 make sure, your script is executable by running the following command. add 'sudo' at the beginning, if admin privileges are required. 
@@ -63,14 +75,14 @@ sudo chmod u+x storj-system-health.sh
 
 ## usage
 
-you can run the script in debug mode to force a push message to your discord channel although no error was found - or without the debug flag to run it in silent mode via crontab (see automation chapter).
+you can run the script in debug mode to force a push message to your discord channel (if enabled) although no error was found - or without the debug flag to run it in silent mode via crontab (see automation chapter).
 
 ```
 ./storj-system-health.sh debug # for a regular discord push message or:
 ./storj-system-health.sh # for silent mode
 ```
 
-it also supports a help command. more commands will be implemented over time.
+it also supports a help command, although it currently makes no sense ;-) 
 
 ```
 ./storj-system-health.sh --help
@@ -79,7 +91,7 @@ it also supports a help command. more commands will be implemented over time.
 ## automation with crontab
 to let the health check run automatically, here’s a crontab example, which runs the script each hour: 
 ```
-0  *    * * *   pi      /home/pi/storj-checks.sh debug
+0  *    * * *   pi      /home/pi/storj-checks.sh
 ```
 
 ## contributing
