@@ -17,19 +17,20 @@
 # ------------------------------------
 
 ## discord webhook url
-DISCORDON=true				      # enables (true) or disables (false) discord pushes
-URL='https://discord.com/api/webhooks/...'    # your discord webhook url
+DISCORDON=true			# enables (true) or disables (false) discord pushes
+URL='https://discord.com/api/webhooks/...' 
+				# your discord webhook url
 
 ## mail variables
-MAILON=true				      # enables (true) or disables (false) email messages
-MAILFROM=""                                   # your "from:" mail address
-MAILTO=""                                     # your "to:" mail address
-MAILSERVER=""                                 # your smtp server address
-MAILUSER=""                                   # your user name from smtp server
-MAILPASS=""                                   # your password from smtp server
+MAILON=true			# enables (true) or disables (false) email messages
+MAILFROM=""                     # your "from:" mail address
+MAILTO=""                       # your "to:" mail address
+MAILSERVER=""                   # your smtp server address
+MAILUSER=""                     # your user name from smtp server
+MAILPASS=""                     # your password from smtp server
 
 ## node data mount point
-MOUNTPOINT="/mnt/node"                        # your storage node mount point
+MOUNTPOINT="/mnt/node"          # your storage node mount point
 
 ## storj node docker names
 ## in case multinodes are used, just add them es separate strings
