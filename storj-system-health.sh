@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# v1.3.3
+# v1.3.4
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -126,7 +126,7 @@ DLOG=""
 #INFO="$(echo "$LOG1H" 2>&1 | grep 'INFO' | grep -v -e 'FATAL' -e 'ERROR')"
 AUDS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed')"
 FATS="$(echo "$LOG1H" 2>&1 | grep 'FATAL' | grep -v 'INFO')"
-ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled')"
+ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter')"
 
 # count errors and grab (real) disk usage (not from strogenode calculations
 tmp_disk_usage="$(df $MOUNTPOINT | grep / | awk '{ print $5}' | sed 's/%//g')%"
@@ -134,7 +134,7 @@ tmp_disk_usage="$(df $MOUNTPOINT | grep / | awk '{ print $5}' | sed 's/%//g')%"
 tmp_fatal_errors="$(echo "$FATS" 2>&1 | grep 'FATAL' -c)"
 tmp_audits_failed="$(echo "$AUDS" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed' -c)"
 tmp_rest_of_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' -c)"
-tmp_io_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' | grep -e 'i/o timeout' | grep -e 'unable to connect to the satellite' -e 'service ping satellite failed' -c)"
+tmp_io_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' | grep -e 'i/o timeout' | grep -e 'ping satellite' -c)"
 
 #echo "info $tmp_info"
 echo ".. audit error count : $tmp_audits_failed"
@@ -269,13 +269,13 @@ echo ".. stats selected : i/o timouts > other errors ignored : $ignore_rest_of_e
 # CONCATENATE THE PUSH MESSAGE
 # ------------------------------------
 
-if [[ $tmp_fatal_errors -eq 0 ]] && [[ $ignore_rest_of_errors -eq 0 ]] && [[ $tmp_audits_failed -eq 0 ]]; then 
+if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq 0 ]] && [[ $tmp_rest_of_errors -eq 0 ]] && [[ $tmp_audits_failed -eq 0 ]]; then 
 	DLOG="**health check :** hdd $tmp_disk_usage;"
 else
 	DLOG="**warning :**"
 fi
 
-if [[ $tmp_fatal_errors -eq 0 ]] && [[ $ignore_rest_of_errors ]]; then 
+if [[ $tmp_fatal_errors -eq 0 ]] && $ignore_rest_of_errors; then 
 	DLOG="$DLOG no errors"
 	if [[ $tmp_io_errors -ne 0 ]]; then 
 		DLOG="$DLOG (skipped io)"
@@ -283,7 +283,7 @@ if [[ $tmp_fatal_errors -eq 0 ]] && [[ $ignore_rest_of_errors ]]; then
 	DLOG="$DLOG;"
 elif [[ $tmp_fatal_errors -eq 0 ]]; then
 	DLOG="$DLOG **ERRORS FOUND** ($tmp_rest_of_errors);"
-elif [[ $ignore_rest_of_errors ]]; then
+elif $ignore_rest_of_errors; then
 	DLOG="$DLOG **FATAL ERRORS** ($tmp_fatal_errors);"
 else
     DLOG="$DLOG **FATAL /+ ERRORS** ($tmp_fatal_errors/$tmp_rest_of_errors);"
@@ -349,6 +349,8 @@ if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_rest_of_errors -ne 0 ]] || [[ $tmp_a
         echo ".. discord push sent."
 fi
 
+# echo "fatal: $tmp_fatal_errors \n others: $tmp_rest_of_errors \n audits: $tmp_audits_failed \n getrepair: $get_repair_ratio_int \n putrepair: $put_repair_ratio_int \n download: $get_ratio_int \n upload: $put_ratio_int \n no_getput: $tmp_no_getput_1h \n ignore: $ignore_rest_of_errors \n debug: $DEB"
+
 
 # =============================================================================
 # SEND EMAIL ALERTS WITH ERROR DETAILS (and debug mail to verify mail works)
@@ -360,7 +362,7 @@ if [[ $tmp_fatal_errors -ne 0 ]]; then
 	echo ".. fatal error mail sent."
 fi
 if [[ $tmp_rest_of_errors -ne 0 ]]; then
-	if [[ $ignore_rest_of_errors ]]; then
+	if $ignore_rest_of_errors; then
 		if [[ $DEB -eq 1 ]]; then
 			swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : OTHER ERRORS FOUND" --body "$ERRS $MAILEOF" --silent "1"
 			echo ".. general error mail sent (ignore: $ignore_rest_of_errors)."
