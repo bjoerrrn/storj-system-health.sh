@@ -339,7 +339,7 @@ fi
 # ------------------------------------
 
 # send discord ping
-if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_io_errors -ne $tmp_rest_of_errors ]] || [[ $tmp_audits_failed -ne 0 ]] || [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]] || [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]] || [[ $tmp_no_getput_1h ]] || [[ $DEB -eq 1 ]]; then 
+if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_io_errors -ne $tmp_rest_of_errors ]] || [[ $tmp_audits_failed -ne 0 ]] || [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]] || [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]] || $tmp_no_getput_1h || [[ $DEB -eq 1 ]]; then 
         ./discord.sh --webhook-url="$URL" --username "storj stats" --text "$DLOG"
         echo ".. discord push sent."
 fi
