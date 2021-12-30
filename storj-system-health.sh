@@ -16,12 +16,12 @@
 # DEFINE VARIABLES AND CONSTANTS
 # ------------------------------------
 
-## discord webhook url
+## discord settings
 DISCORDON=true			# enables (true) or disables (false) discord pushes
 URL='https://discord.com/api/webhooks/...' 
 				# your discord webhook url
 
-## mail variables
+## mail settings
 MAILON=true			# enables (true) or disables (false) email messages
 MAILFROM=""                     # your "from:" mail address
 MAILTO=""                       # your "to:" mail address
