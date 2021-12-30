@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# v1.3.5
+# v1.4.0
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -10,6 +10,58 @@
 # > uses parts of storj_success_rate from https://github.com/ReneSmeekes/storj_success_rate
 # 
 # -------------------------------------------------------------------------
+
+
+# =============================================================================
+# DEFINE VARIABLES AND CONSTANTS
+# ------------------------------------
+
+## discord webhook url
+DISCORDON=true				      # enables (true) or disables (false) discord pushes
+URL='https://discord.com/api/webhooks/...'    # your discord webhook url
+
+## mail variables
+MAILON=true				      # enables (true) or disables (false) email messages
+MAILFROM=""                                   # your "from:" mail address
+MAILTO=""                                     # your "to:" mail address
+MAILSERVER=""                                 # your smtp server address
+MAILUSER=""                                   # your user name from smtp server
+MAILPASS=""                                   # your password from smtp server
+
+## node data mount point
+MOUNTPOINT="/mnt/node"                        # your storage node mount point
+
+## storj node docker names
+## in case multinodes are used, just add them es separate strings
+NODES=(
+	"storagenode"
+	#"storagenode-2"
+	#"storagenode-3"
+)
+
+
+# =============================================================================
+# DEBUG MODE ON / OFF
+# ------------------------------------
+
+if [ $# -ge 2 ]
+then
+	DEB=2
+	echo -e ".. mail debug mode on"
+elif [ $# -ge 1 ]
+then 
+	DEB=1
+	echo -e ".. discord debug mode on"
+else
+	DEB=0
+	echo -e ".. debug mode off"
+fi
+
+
+# =============================================================================
+# CHECK DEPENDENCIES AND LIBRARIES
+# ------------------------------------
+
 
 # check for jq
 
@@ -42,6 +94,10 @@ swaks_ok=$?
 # swaks exists and runs ok
 
 
+# =============================================================================
+# HELP TEXT
+# ------------------------------------
+
 
 help_text="Usage: storj-system-health.sh [OPTIONS]
 
@@ -54,37 +110,37 @@ General options:
 [[ "${1}" == "--help" ]] && echo "$help_text" && exit 0
 
 
+
+# =============================================================================
+# START SCRIPT PROCESSING
+# ------------------------------------
+
+
 # let the script run in low performance to not block the system
 renice 19 $$ 
 
+# check docker containers
+DOCKERPS="$(docker ps)"
+# grab (real) disk usage
+tmp_disk_usage="$(df $MOUNTPOINT | grep / | awk '{ print $5}' | sed 's/%//g')%"
 
-# =============================================================================
-# DEFINE VARIABLES AND CONSTANTS
-# ------------------------------------
 
-## discord webhook url
-URL='https://discord.com/api/webhooks/...'    # your discord webhook url
-## mail variables
-MAILFROM=""                                   # your "from:" mail address
-MAILTO=""                                     # your "to:" mail address
-MAILSERVER=""                                 # your smtp server address
-MAILUSER=""                                   # your user name from smtp server
-MAILPASS=""                                   # your password from smtp server
-MAILEOF=".. end of mail."
-## node data mount point
-MOUNTPOINT="/mnt/node"                        # your storage node mount point
+## go through the list of storagenodes
+for NODE in "${NODES[@]}"; do
 
-## storj node docker name
-NODENAME="storagenode"
+echo "running the script for node \"$NODE\" .."
+
+## check if node is running in docker
+RUNNING="$(echo "$DOCKERPS" 2>&1 | grep "$NODE" -c)"
+echo ".. node is running : $RUNNING"
 
 # docker log selection from the last 24 hours and 1 hour
-LOG1D="$(docker logs --since "$(date -d "$date -1 day" +"%Y-%m-%dT%H:%M")" $NODENAME 2>&1)"
+LOG1D="$(docker logs --since "$(date -d "$date -1 day" +"%Y-%m-%dT%H:%M")" $NODE 2>&1)"
 echo ".. docker log 1d selected."
-LOG1H="$(docker logs --since "$(date -d "$date -1 hour" +"%Y-%m-%dT%H:%M")" $NODENAME 2>&1)"
+LOG1H="$(docker logs --since "$(date -d "$date -1 hour" +"%Y-%m-%dT%H:%M")" $NODE 2>&1)"
 echo ".. docker log 1h selected."
 
-RUNNING="$(docker ps | grep 'storagenode' -c)"
-
+# define audit variables, which are not used, in case there is no audit failure
 audit_success=0
 audit_failed_warn=0
 audit_failed_warn_text=""
@@ -92,24 +148,6 @@ audit_failed_crit=0
 audit_failed_crit_text=""
 audit_recfailrate=0.000%
 audit_failrate=0.000%
-
-
-# =============================================================================
-# DEBUG MODE ON / OFF
-# ------------------------------------
-
-if [ $# -ge 2 ]
-then
-	DEB=2
-	echo -e ".. mail debug mode on"
-elif [ $# -ge 1 ]
-then 
-	DEB=1
-	echo -e ".. discord debug mode on"
-else
-	DEB=0
-	echo -e ".. debug mode off"
-fi
 
 
 ### > check if storagenode is runnning; if not, cancel analysis and push / email alert
@@ -128,8 +166,7 @@ AUDS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed')"
 FATS="$(echo "$LOG1H" 2>&1 | grep 'FATAL' | grep -v 'INFO')"
 ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter')"
 
-# count errors and grab (real) disk usage (not from strogenode calculations
-tmp_disk_usage="$(df $MOUNTPOINT | grep / | awk '{ print $5}' | sed 's/%//g')%"
+# count errors 
 #tmp_info="$(echo "$INFO" 2>&1 | grep 'INFO' -c)"
 tmp_fatal_errors="$(echo "$FATS" 2>&1 | grep 'FATAL' -c)"
 tmp_audits_failed="$(echo "$AUDS" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed' -c)"
@@ -340,8 +377,10 @@ fi
 
 # send discord ping
 if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_io_errors -ne $tmp_rest_of_errors ]] || [[ $tmp_audits_failed -ne 0 ]] || [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]] || [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]] || $tmp_no_getput_1h || [[ $DEB -eq 1 ]]; then 
+    if $DISCORDON; then
         ./discord.sh --webhook-url="$URL" --username "storj stats" --text "$DLOG"
         echo ".. discord push sent."
+    fi
 fi
 
 # echo "fatal: $tmp_fatal_errors \n others: $tmp_rest_of_errors \n audits: $tmp_audits_failed \n getrepair: $get_repair_ratio_int \n putrepair: $put_repair_ratio_int \n download: $get_ratio_int \n upload: $put_ratio_int \n no_getput: $tmp_no_getput_1h \n ignore: $ignore_rest_of_errors \n debug: $DEB"
@@ -352,23 +391,25 @@ fi
 # ------------------------------------
 
 # send email alerts
+if $MAILON; then
+
 if [[ $tmp_fatal_errors -ne 0 ]]; then 
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : FATAL ERRORS FOUND" --body "$FATS $MAILEOF" --silent "1"
+	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : FATAL ERRORS FOUND" --body "$FATS" --silent "1"
 	echo ".. fatal error mail sent."
 fi
 if [[ $tmp_rest_of_errors -ne 0 ]]; then
 	if $ignore_rest_of_errors; then
 		if [[ $DEB -eq 1 ]]; then
-			swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : OTHER ERRORS FOUND" --body "$ERRS $MAILEOF" --silent "1"
+			swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : OTHER ERRORS FOUND" --body "$ERRS" --silent "1"
 			echo ".. general error mail sent (ignore: $ignore_rest_of_errors)."
 		fi
 	else
-		swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : OTHER ERRORS FOUND" --body "$ERRS $MAILEOF" --silent "1"
+		swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : OTHER ERRORS FOUND" --body "$ERRS" --silent "1"
 		echo ".. general error mail sent (ignore: $ignore_rest_of_errors)."
 	fi
 fi
 if [[ $tmp_audits_failed -ne 0 ]]; then 
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : AUDIT ERRORS FOUND" --body "Recoverable: $audit_recfailrate \n\n$audit_failed_warn_text \n\nCritical: $audit_failrate \n\n$audit_failed_crit_text\n\nComplete: \n$AUDS \n\n$AUDS \n\n$MAILEOF" --silent "1"
+	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : AUDIT ERRORS FOUND" --body "Recoverable: $audit_recfailrate \n\n$audit_failed_warn_text \n\nCritical: $audit_failrate \n\n$audit_failed_crit_text\n\nComplete: \n$AUDS \n\n$AUDS" --silent "1"
 	echo ".. audit error mail sent."
 fi
 # send debug mail 
@@ -377,13 +418,17 @@ if [[ $DEB -eq 2 ]]; then
 	echo ".. debut mail sent."
 fi
 
+fi
 
 
 ### > check if storagenode is runnning; if not, cancel analysis and push alert
 ###   email alert comes automatically through uptimerobot-ping alert. 
 ###   if relevant for you, enable the mail alert below.
 else
+	if $DISCORDON; then
 	./discord.sh --webhook-url="$URL" --username "storj stats" --text "**warning :** storagenode not running!"
+	fi
 	#swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : NOT RUNNING" --body "warning: storage node is not running." --silent "1"
 fi
 
+done # end of while command of storagenodes list
