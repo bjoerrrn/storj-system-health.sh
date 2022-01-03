@@ -1,17 +1,16 @@
 # storj-system-health.sh
 
 ## about this shell script
-this linux shell script checks, if a storage node (from the [storj](https://www.storj.io) project) runs into errors and alerts the operator by discord push messages as well as emails. 
+this linux shell script checks, if a storage node (from the [storj][storj] project) runs into errors and alerts the operator by discord push messages as well as emails. 
 
-**list of features:**
+**features:**
 * multinode support
-* optionally discord and/or mail alerts
-* emails containg an excerpt of the relevant error log message
-* if the debug mode is used, disk usage of the mounted data storage disk mount point
-* alerts in case a threshold of repair gets/puts and downloads/uploads are reached 
-* alerts if there was no get/put at all in the last hour
+* optionally discord (as quick notifications) and/or mail (with error details) alerts
+* alerts in case a threshold of repair gets/puts and downloads/uploads are reached (storj node discqualification risk)
+* alerts if there was no get/put at all in the last hour (storj node discqualification risk)
 * alerts in case the node is offline (docker container not started)
 * optimized for crontab and command line usage
+* only requires [curl][curl], [jq][jq] and [swaks][swaks] to run 🔥
 
 ## example screenshots
 
@@ -28,18 +27,20 @@ another message saying, that there are general errors
 ![fatal error message](/examples/discord-example-general-error.jpg)
 
 ## dependencies
-this tool uses the [discord.sh](https://github.com/ChaoticWeg/discord.sh) script to send push messages to your discord channel. 
+- [curl][curl] (http requests)
+- [jq][jq] (JSON parsing)
+- [swaks][swaks] (mail sending, smtp)
+- [discord.sh][discord.sh] (discord pushes)
 
-it also makes use of specific values / selections from the [storj_success_rate.sh](https://github.com/ReneSmeekes/storj_success_rate) script, in order not to reinvent the wheel.
+## setting up storj system health
+1. optional: [setup a webhook][webhook] in the desired discord text channel
+2. optional: grab your smtp email authentication data
+3. download (or clone) a copy of `discord.sh`
+4. download (or clone) a copy of `storj-system-health.sh` and `storj-system-health.credo` (coming soon)
+5. setup discord and mail variables - or `storj-system-health.credo` (coming soon)
+6. Go nuts.
 
-the jq, swaks and curl libraries are required as well. 
-
-## prerequisites
-to get notified by a discord push message, you need to setup a webhook on your discord server: [howto](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks). 
-
-you also need to have the [discord.sh](https://github.com/ChaoticWeg/discord.sh) script available and executable in the same folder. 
-
-## configuration
+## setting up variables
 you will need to modify these variables for your specific node and smtp mail server configuration. here's an example to support you entering the right data:
 ```
 ## discord settings
@@ -71,6 +72,9 @@ make sure, your script is executable by running the following command. add 'sudo
 ```
 chmod u+x storj-system-health.sh  # or:
 sudo chmod u+x storj-system-health.sh
+
+chmod u+x discord.sh  # or:
+sudo chmod u+x discord.sh
 ```
 
 ## usage
@@ -101,3 +105,14 @@ pull requests are welcome. for major changes, please open an issue first to disc
 ## license
 
 [GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.en.html)
+
+
+<!-- Programs -->
+[discord.sh]: https://github.com/ChaoticWeg/discord.sh
+[successrates.sh]: https://github.com/ReneSmeekes/storj_success_rate
+[curl]: https://curl.haxx.se/
+[jq]: https://stedolan.github.io/jq/
+[storj]: https://www.storj.io
+[swaks]: https://github.com/jetmore/swaks
+<!-- Documentation -->
+[webhook]: https://support.discordapp.com/hc/en-us/articles/228383668-Intro-to-Webhooks
