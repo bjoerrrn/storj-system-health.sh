@@ -1,9 +1,9 @@
 # storj-system-health.sh
 
 ## about this shell script
-this linux shell script checks, if a storage node (from the [storj][storj] project) runs into errors and alerts the operator by discord push messages as well as emails. 
+this linux shell script checks, if a [storj node][storagenode] ([:storage node] from the [storj][storj] project) runs into errors and alerts the operator by discord push messages as well as emails. requires at least one [storj node][storagenode] running with [docker][docker] on linux.
 
-**features:**
+## features
 * multinode support 🌍
 * optionally discord (as quick notifications) and/or mail (with error details) alerts 📥 🔔
 * alerts in case a threshold of repair gets/puts and downloads/uploads are reached (storj node discqualification risk) ⚠️
@@ -12,21 +12,9 @@ this linux shell script checks, if a storage node (from the [storj][storj] proje
 * optimized for crontab and command line usage 💻
 * only requires [curl][curl], [jq][jq] and [swaks][swaks] to run 🔥
 
-## example screenshots
-
-an "ok" message
-
-![ok message](/examples/discord-example-all-fine.jpg)
-
-a message saying, that there are fatal errors
-
-![fatal error message](/examples/discord-example-fatal-error.jpg)
-
-another message saying, that there are general errors
-
-![fatal error message](/examples/discord-example-general-error.jpg)
-
 ## dependencies
+- [storj node][storagenode] node up and running, within a 
+- [docker][docker] container
 - [curl][curl] (http requests)
 - [jq][jq] (JSON parsing)
 - [swaks][swaks] (mail sending, smtp)
@@ -98,6 +86,22 @@ to let the health check run automatically, here’s a crontab example, which run
 0  *    * * *   pi      /home/pi/storj-checks.sh
 ```
 
+
+## example screenshots
+
+an "ok" message
+
+![ok message](/examples/discord-example-all-fine.jpg)
+
+a message saying, that there are fatal errors
+
+![fatal error message](/examples/discord-example-fatal-error.jpg)
+
+another message saying, that there are general errors
+
+![fatal error message](/examples/discord-example-general-error.jpg)
+
+
 ## contributing
 
 pull requests are welcome. for major changes, please open an issue first to discuss what you would like to change.
@@ -113,6 +117,8 @@ pull requests are welcome. for major changes, please open an issue first to disc
 [curl]: https://curl.haxx.se/
 [jq]: https://stedolan.github.io/jq/
 [storj]: https://www.storj.io
+[docker]: https://github.com/docker
 [swaks]: https://github.com/jetmore/swaks
+[storagenode]: https://www.storj.io/node
 <!-- Documentation -->
 [webhook]: https://support.discordapp.com/hc/en-us/articles/228383668-Intro-to-Webhooks
