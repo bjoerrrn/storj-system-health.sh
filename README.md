@@ -4,12 +4,12 @@
 this linux shell script checks, if a storage node (from the [storj][storj] project) runs into errors and alerts the operator by discord push messages as well as emails. 
 
 **features:**
-* multinode support
-* optionally discord (as quick notifications) and/or mail (with error details) alerts
-* alerts in case a threshold of repair gets/puts and downloads/uploads are reached (storj node discqualification risk)
-* alerts if there was no get/put at all in the last hour (storj node discqualification risk)
-* alerts in case the node is offline (docker container not started)
-* optimized for crontab and command line usage
+* multinode support 🌍
+* optionally discord (as quick notifications) and/or mail (with error details) alerts 📥 🔔
+* alerts in case a threshold of repair gets/puts and downloads/uploads are reached (storj node discqualification risk) ⚠️
+* alerts if there was no get/put at all in the last hour (storj node discqualification risk) ⚠️
+* alerts in case the node is offline (docker container not started) ⚠️
+* optimized for crontab and command line usage 💻
 * only requires [curl][curl], [jq][jq] and [swaks][swaks] to run 🔥
 
 ## example screenshots
