@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# v1.4.0
+# v1.5.0
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -13,50 +13,64 @@
 
 
 # =============================================================================
-# DEFINE VARIABLES AND CONSTANTS
+# CHECK AND HANDLE PARAMETERS
 # ------------------------------------
 
-## discord settings
-DISCORDON=true			# enables (true) or disables (false) discord pushes
-URL='https://discord.com/api/webhooks/...' 
-				# your discord webhook url
+config_file="./storj-system-health.credo" # default value
+DEB=0 # default value
+readonly help_text="Usage: $0 [OPTIONS]
 
-## mail settings
-MAILON=true			# enables (true) or disables (false) email messages
-MAILFROM=""                     # your "from:" mail address
-MAILTO=""                       # your "to:" mail address
-MAILSERVER=""                   # your smtp server address
-MAILUSER=""                     # your user name from smtp server
-MAILPASS=""                     # your password from smtp server
+General options:
+  -h            Display this help and exit
+  -c <path>     Use individual file path for properties
+  -d            Debug mode: send discord push if health check ok
+  -m            Debug mode: dpush + test mail settings with test mail"
 
-## node data mount point
-MOUNTPOINT="/mnt/node"          # your storage node mount point
 
-## storj node docker names
-## in case multinodes are used, just add them es separate strings
-NODES=(
-	"storagenode"
-	#"storagenode-2"
-	#"storagenode-3"
-)
+while getopts ":hc:dm" flag
+do
+    case "${flag}" in
+        c) config_file=${OPTARG};;
+        d) DEB=1 && echo -e ".. discord debug mode on";;
+        m) DEB=2 && echo -e ".. mail debug mode on";;
+        h | *) echo "$help_text" && exit 0;;
+    esac
+done
+shift $((OPTIND-1))
 
 
 # =============================================================================
-# DEBUG MODE ON / OFF
+# DEFINE VARIABLES AND CONSTANTS
 # ------------------------------------
 
-if [ $# -ge 2 ]
+# check, if config file exists and is readable
+if [ ! -r "$config_file" ]
 then
-	DEB=2
-	echo -e ".. mail debug mode on"
-elif [ $# -ge 1 ]
-then 
-	DEB=1
-	echo -e ".. discord debug mode on"
-else
-	DEB=0
-	echo -e ".. debug mode off"
+    echo "fatal: config file $config_file not found / readable."
+    exit 2
 fi
+
+# loads config data into variables 
+while IFS== read var values ; do
+    IFS=, read -a $var <<< "$values"
+done < "$config_file"
+
+[[ -z "$DISCORDON" ]] && echo "fatal: DISCORDON not specified in .credo" && exit 2
+[[ -z "$DISCORDURL" ]] && echo "fatal: DISCORDURL not specified in .credo" && exit 2
+[[ -z "$MAILON" ]] && echo "fatal: MAILON not specified in .credo" && exit 2
+[[ -z "$MAILFROM" ]] && echo "fatal: MAILFROM not specified in .credo" && exit 2
+[[ -z "$MAILTO" ]] && echo "fatal: MAILTO not specified in .credo" && exit 2
+[[ -z "$MAILSERVER" ]] && echo "fatal: MAILSERVER not specified in .credo" && exit 2
+[[ -z "$MAILUSER" ]] && echo "fatal: MAILUSER not specified in .credo" && exit 2
+[[ -z "$MAILPASS" ]] && echo "fatal: MAILPASS not specified in .credo" && exit 2
+[[ -z "$NODES" ]] && echo "failure: NODES not specified in .credo" && exit 2
+[[ -z "$MOUNTPOINTS" ]] && echo "failure: MOUNTPOINTS not specified in .credo" && exit 2
+[[ ${#MOUNTPOINTS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and MOUNTPOINTS do not match in .credo" && exit 2
+
+echo ".. nodes:       ${NODES[@]}"
+echo ".. mountpoints: ${MOUNTPOINTS[@]}"
+
+echo ".. config file $config_file successfully loaded"
 
 
 # =============================================================================
@@ -67,49 +81,27 @@ fi
 # check for jq
 
 jq --version >/dev/null 2>&1
-jq_ok=$?
+readonly jq_ok=$?
 
-[[ "$jq_ok" -eq 127 ]] && \
-    echo "fatal: jq not installed" && exit 2
-[[ "$jq_ok" -ne 0 ]] && \
-    echo "fatal: unknown error in jq" && exit 2
-
+[[ "$jq_ok" -eq 127 ]] && echo "fatal: jq not installed" && exit 2
+[[ "$jq_ok" -ne 0 ]] && echo "fatal: unknown error in jq" && exit 2
 # jq exists and runs ok
 
 
 # check for curl
 curl --version >/dev/null 2>&1
-curl_ok=$?
+readonly curl_ok=$?
 
-[[ "$curl_ok" -eq 127 ]] && \
-    echo "fatal: curl not installed" && exit 2
+[[ "$curl_ok" -eq 127 ]] && echo "fatal: curl not installed" && exit 2
 # curl exists and runs ok
 
 
 # check for swaks
 swaks --version >/dev/null 2>&1
-swaks_ok=$?
+readonly swaks_ok=$?
 
-[[ "$swaks_ok" -eq 127 ]] && \
-    echo "fatal: swaks not installed" && exit 2
+[[ "$swaks_ok" -eq 127 ]] && echo "fatal: swaks not installed" && exit 2
 # swaks exists and runs ok
-
-
-# =============================================================================
-# HELP TEXT
-# ------------------------------------
-
-
-help_text="Usage: storj-system-health.sh [OPTIONS]
-
-General options:
-  --help                         Display this help and exit"
-  
-# HELP TEXT PLEASE
-# [[ "$#" -eq 0 ]] && echo "$help_text" && exit 0
-[[ "${1}" == "help" ]] && echo "$help_text" && exit 0
-[[ "${1}" == "--help" ]] && echo "$help_text" && exit 0
-
 
 
 # =============================================================================
@@ -121,15 +113,17 @@ General options:
 renice 19 $$ 
 
 # check docker containers
-DOCKERPS="$(docker ps)"
-# grab (real) disk usage
-tmp_disk_usage="$(df $MOUNTPOINT | grep / | awk '{ print $5}' | sed 's/%//g')%"
-
+readonly DOCKERPS="$(docker ps)"
 
 ## go through the list of storagenodes
-for NODE in "${NODES[@]}"; do
+for (( i=0; i<${#NODES[@]}; i++ )); do
+NODE=${NODES[$i]}
 
-echo "running the script for node \"$NODE\" .."
+# grab (real) disk usage
+tmp_disk_usage="$(df ${MOUNTPOINTS[$i]} | grep / | awk '{ print $5}' | sed 's/%//g')%"
+
+echo "==="
+echo "running the script for node \"$NODE\" (${MOUNTPOINTS[$i]}) .."
 
 ## check if node is running in docker
 RUNNING="$(echo "$DOCKERPS" 2>&1 | grep "$NODE" -c)"
@@ -379,7 +373,7 @@ fi
 # send discord ping
 if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_io_errors -ne $tmp_rest_of_errors ]] || [[ $tmp_audits_failed -ne 0 ]] || [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]] || [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]] || $tmp_no_getput_1h || [[ $DEB -eq 1 ]]; then 
     if $DISCORDON; then
-        ./discord.sh --webhook-url="$URL" --username "storj stats" --text "$DLOG"
+        ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "$DLOG"
         echo ".. discord push sent."
     fi
 fi
@@ -427,7 +421,7 @@ fi
 ###   if relevant for you, enable the mail alert below.
 else
 	if $DISCORDON; then
-	./discord.sh --webhook-url="$URL" --username "storj stats" --text "**warning :** storagenode not running!"
+	./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "**warning :** storagenode not running!"
 	fi
 	#swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : NOT RUNNING" --body "warning: storage node is not running." --silent "1"
 fi
