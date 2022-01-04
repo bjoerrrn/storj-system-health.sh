@@ -24,16 +24,16 @@ this linux shell script checks, if a [storj node][storagenode] ([:storage node] 
 1. optional: [setup a webhook][webhook] in the desired discord text channel
 2. optional: grab your smtp email authentication data
 3. download (or clone) a copy of `discord.sh`
-4. download (or clone) a copy of `storj-system-health.sh` and `storj-system-health.credo` (coming soon)
-5. setup discord and mail variables - or `storj-system-health.credo` (coming soon)
+4. download (or clone) a copy of `storj-system-health.sh` and `storj-system-health.credo`
+5. optional: setup discord and mail variables in `storj-system-health.credo`
 6. Go nuts.
 
-## setting up variables
-you will need to modify these variables for your specific node and smtp mail server configuration. here's an example to support you entering the right data:
+## setting up variables in *.credo
+you will need to modify these variables in `*.credo` for your specific node and smtp mail server configuration. the `*.credo` file must not include comments and blank lines, the following description is just for your explanation:
 ```
 ## discord settings
 DISCORDON=true			# enables (true) or disables (false) discord pushes
-URL='https://discord.com/api/webhooks/...' 
+DISCORDURL=https://discord.com/api/webhooks/...
 				# your discord webhook url
 
 ## mail settings
@@ -44,16 +44,13 @@ MAILSERVER=""                   # your smtp server address
 MAILUSER=""                     # your user name from smtp server
 MAILPASS=""                     # your password from smtp server
 
-## node data mount point
-MOUNTPOINT="/mnt/node"          # your storage node mount point
+## node data mount points
+MOUNTPOINTS=/mnt/node           # your storage node mount point, multiple: separated with comma
+                                # e.g. /mnt/node,/mnt/node-a,/mnt/node-b
 
 ## storj node docker names
-## in case multinodes are used, just add them es separate strings
-NODES=(
-	"storagenode"
-	#"storagenode-2"
-	#"storagenode-3"
-)
+NODES=storagenode               # storage node names, multiple: separated with comma, 
+                                # e.g. storagenode,storagenode-a,storagenode-b
 ```
 
 make sure, your script is executable by running the following command. add 'sudo' at the beginning, if admin privileges are required. 
@@ -70,14 +67,20 @@ sudo chmod u+x discord.sh
 you can run the script in debug mode to force a push message to your discord channel (if enabled) although no error was found - or without the debug flag to run it in silent mode via crontab (see automation chapter).
 
 ```
-./storj-system-health.sh debug # for a regular discord push message or:
+./storj-system-health.sh -d # for a regular discord push message or:
 ./storj-system-health.sh # for silent mode
 ```
 
-it also supports a help command, although it currently makes no sense ;-) 
+optionally you can pass another path to `*.credo`, in case it has another name or source:
 
 ```
-./storj-system-health.sh --help
+./storj-system-health.sh -c /home/pi/anothername.credo
+```
+
+it also supports a help command for further details:
+
+```
+./storj-system-health.sh -h
 ```
 
 ## automation with crontab
