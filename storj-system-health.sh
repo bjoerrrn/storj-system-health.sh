@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# v1.5.1
+# v1.5.2
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -75,9 +75,12 @@ done < "$config_file"
 [[ -z "$MAILPASS" ]] && echo "fatal: MAILPASS not specified in .credo" && exit 2
 [[ -z "$NODES" ]] && echo "failure: NODES not specified in .credo" && exit 2
 [[ -z "$MOUNTPOINTS" ]] && echo "failure: MOUNTPOINTS not specified in .credo" && exit 2
+[[ -z "$NODEURLS" ]] && echo "failure: NODEURLS not specified in .credo" && exit 2
 [[ ${#MOUNTPOINTS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and MOUNTPOINTS do not match in .credo" && exit 2
+[[ ${#NODEURLS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and NODEURLS do not match in .credo" && exit 2
 
 [[ "$VERBOSE" == "true" ]] && echo " *** config file loaded"
+
 
 
 # =============================================================================
@@ -132,6 +135,22 @@ tmp_disk_usage="$(df ${MOUNTPOINTS[$i]} | grep / | awk '{ print $5}' | sed 's/%/
 ## check if node is running in docker
 RUNNING="$(echo "$DOCKERPS" 2>&1 | grep "$NODE" -c)"
 [[ "$VERBOSE" == "true" ]] && echo " *** node is running : $RUNNING"
+
+# grab satellite scores
+node_url=${NODEURLS[$i]}
+satellite_scores=$(echo -E $(curl -s "$node_url/api/sno/satellites" |
+jq -r \
+        --argjson auditScore 1 \
+        --argjson suspensionScore 1 \
+        --argjson onlineScore 0.95 \
+        '.audits[] as $a | ($a.satelliteName | sub(":.*";"")) as $name |
+        reduce ($ARGS.named|keys[]) as $key (
+                [];
+                if $a[$key] < $ARGS.named[$key] then (
+                        . + ["\($key) \(100*$a[$key]|floor)% @ \($name) ... "]
+                ) else . end
+                ) | .[]'))
+[[ "$VERBOSE" == "true" ]] && echo " *** satellite scores selected."
 
 # docker log selection from the last 24 hours and 1 hour
 LOG1D="$(docker logs --since "$(date -d "$date -1 day" +"%Y-%m-%dT%H:%M")" $NODE 2>&1)"
@@ -366,6 +385,11 @@ if [[ $DEB -ne 0 ]] && $VERBOSE ; then
 		echo "AUDIT"
 		echo "$AUDS"
 	fi
+	if [[ $satellite_scores != "" ]]; then
+		echo "==="
+		echo "SATELLITE SCORES"
+		echo "$satellite_scores"
+	fi
 	echo "==="
 fi
 
@@ -379,7 +403,11 @@ fi
 if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_io_errors -ne $tmp_rest_of_errors ]] || [[ $tmp_audits_failed -ne 0 ]] || [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]] || [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]] || $tmp_no_getput_1h || [[ $DEB -eq 1 ]]; then 
     if $DISCORDON; then
         ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "$DLOG"
-        [[ "$VERBOSE" == "true" ]] && echo " *** discord push sent."
+        [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent."
+        if [[ $satellite_scores != "" ]]; then
+        	./discord.sh --webhook-url="$DISCORDURL" --username "storj warning" --text "**warning :** satellite scores issue --> $satellite_scores"
+        	[[ "$VERBOSE" == "true" ]] && echo " *** discord satellite push sent."
+        fi
     fi
 fi
 
@@ -393,6 +421,10 @@ fi
 # send email alerts
 if $MAILON; then
 
+if [[ $satellite_scores != "" ]]; then
+    swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : SATELLITE SCORES BELOW THRESHOLD" --body "$satellite_scores" --silent "1"
+	[[ "$VERBOSE" == "true" ]] && echo " *** satellite warning mail sent."
+fi
 if [[ $tmp_fatal_errors -ne 0 ]]; then 
 	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : FATAL ERRORS FOUND" --body "$FATS" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** fatal error mail sent."
