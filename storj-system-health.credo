@@ -1,0 +1,10 @@
+DISCORDON=true
+DISCORDURL=https://discord.com/api/webhooks/...
+MAILON=false
+MAILFROM=
+MAILTO=
+MAILSERVER=
+MAILUSER=
+MAILPASS=
+NODES=storagenode
+MOUNTPOINTS=/mnt/node
