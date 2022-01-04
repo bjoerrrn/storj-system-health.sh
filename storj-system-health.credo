@@ -1,5 +1,5 @@
-DISCORDON=true
-DISCORDURL=https://discord.com/api/webhooks/...
+DISCORDON=false
+DISCORDURL=
 MAILON=false
 MAILFROM=
 MAILTO=
