@@ -67,8 +67,8 @@ sudo chmod u+x discord.sh
 you can run the script in debug mode to force a push message to your discord channel (if enabled) although no error was found - or without the debug flag to run it in silent mode via crontab (see automation chapter).
 
 ```
-./storj-system-health.sh -d # for a regular discord push message or:
-./storj-system-health.sh # for silent mode
+./storj-system-health.sh -d   # for a regular discord push message or:
+./storj-system-health.sh      # for silent mode
 ```
 
 optionally you can pass another path to `*.credo`, in case it has another name or source:
