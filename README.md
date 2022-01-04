@@ -32,25 +32,25 @@ this linux shell script checks, if a [storj node][storagenode] ([:storage node] 
 you will need to modify these variables in `*.credo` for your specific node and smtp mail server configuration. the `*.credo` file must not include comments and blank lines, the following description is just for your explanation:
 ```
 ## discord settings
-DISCORDON=true			# enables (true) or disables (false) discord pushes
+DISCORDON=true.         # enables (true) or disables (false) discord pushes
 DISCORDURL=https://discord.com/api/webhooks/...
-				# your discord webhook url
+                        # your discord webhook url
 
 ## mail settings
-MAILON=true			# enables (true) or disables (false) email messages
-MAILFROM=""                     # your "from:" mail address
-MAILTO=""                       # your "to:" mail address
-MAILSERVER=""                   # your smtp server address
-MAILUSER=""                     # your user name from smtp server
-MAILPASS=""                     # your password from smtp server
+MAILON=true             # enables (true) or disables (false) email messages
+MAILFROM=""             # your "from:" mail address
+MAILTO=""               # your "to:" mail address
+MAILSERVER=""           # your smtp server address
+MAILUSER=""             # your user name from smtp server
+MAILPASS=""             # your password from smtp server
 
 ## node data mount points
-MOUNTPOINTS=/mnt/node           # your storage node mount point, multiple: separated with comma
-                                # e.g. /mnt/node,/mnt/node-a,/mnt/node-b
+MOUNTPOINTS=/mnt/node   # your storage node mount point, multiple: separated with comma
+                        # e.g. /mnt/node,/mnt/node-a,/mnt/node-b
 
 ## storj node docker names
-NODES=storagenode               # storage node names, multiple: separated with comma, 
-                                # e.g. storagenode,storagenode-a,storagenode-b
+NODES=storagenode       # storage node names, multiple: separated with comma, 
+                        # e.g. storagenode,storagenode-a,storagenode-b
 ```
 
 make sure, your script is executable by running the following command. add 'sudo' at the beginning, if admin privileges are required. 
