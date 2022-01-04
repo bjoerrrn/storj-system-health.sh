@@ -17,7 +17,7 @@ this linux shell script checks, if a [storj node][storagenode] ([:storage node] 
 - [storj node][storagenode] node up and running, within a 
 - [docker][docker] container
 - [curl][curl] (http requests)
-- [jq][jq] (JSON parsing)
+- [jq][jq] 1.6 ⚠️ (JSON parsing)
 - [swaks][swaks] (mail sending, smtp)
 - [discord.sh][discord.sh] (discord pushes)
 
