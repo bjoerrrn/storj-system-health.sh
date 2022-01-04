@@ -6,6 +6,7 @@ this linux shell script checks, if a [storj node][storagenode] ([:storage node] 
 ## features
 * multinode support 🌍
 * optionally discord (as quick notifications) and/or mail (with error details) alerts 📥 🔔
+* alerts when audit, suspension and/or online scores are below a threshold (storj node discqualification risk) ⚠️
 * alerts in case a threshold of repair gets/puts and downloads/uploads are reached (storj node discqualification risk) ⚠️
 * alerts if there was no get/put at all in the last hour (storj node discqualification risk) ⚠️
 * alerts in case the node is offline (docker container not started) ⚠️
@@ -51,6 +52,9 @@ MOUNTPOINTS=/mnt/node   # your storage node mount point, multiple: separated wit
 ## storj node docker names
 NODES=storagenode       # storage node names, multiple: separated with comma, 
                         # e.g. storagenode,storagenode-a,storagenode-b
+NODEURLS=localhost:14002
+                        # storage node dashboard urls, multiple: separated with comma, 
+                        # e.g. localhost:14002,192.168.171.5:14002
 ```
 
 make sure, your script is executable by running the following command. add 'sudo' at the beginning, if admin privileges are required. 
