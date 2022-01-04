@@ -7,4 +7,5 @@ MAILSERVER=
 MAILUSER=
 MAILPASS=
 NODES=storagenode
+NODEURLS=localhost:14002
 MOUNTPOINTS=/mnt/node
