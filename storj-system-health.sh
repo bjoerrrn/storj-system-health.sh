@@ -87,29 +87,26 @@ done < "$config_file"
 # CHECK DEPENDENCIES AND LIBRARIES
 # ------------------------------------
 
-
 # check for jq
-
 jq --version >/dev/null 2>&1
 readonly jq_ok=$?
-
 [[ "$jq_ok" -eq 127 ]] && echo "fatal: jq not installed" && exit 2
 [[ "$jq_ok" -ne 0 ]] && echo "fatal: unknown error in jq" && exit 2
 # jq exists and runs ok
 
+# verify jq version minimum 1.6 
+jqversion="$(echo \"$(jq --version)\" | grep -o '[0-9]*[\.][0-9]*')" 
+[[ $(echo $jqversion '<' 1.6 | bc -l) -eq 1 ]] && echo "fatal: jq version 1.6 required (installed: $jqversion)" && exit 2
 
 # check for curl
 curl --version >/dev/null 2>&1
 readonly curl_ok=$?
-
 [[ "$curl_ok" -eq 127 ]] && echo "fatal: curl not installed" && exit 2
 # curl exists and runs ok
-
 
 # check for swaks
 swaks --version >/dev/null 2>&1
 readonly swaks_ok=$?
-
 [[ "$swaks_ok" -eq 127 ]] && echo "fatal: swaks not installed" && exit 2
 # swaks exists and runs ok
 
