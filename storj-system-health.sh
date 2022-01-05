@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# v1.5.2
+# v1.5.3
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -178,7 +178,6 @@ if [[ $RUNNING -eq 1 ]]; then
 # ------------------------------------
 
 # select error messages in detail (partially extracted text log)
-DLOG=""
 #INFO="$(echo "$LOG1H" 2>&1 | grep 'INFO' | grep -v -e 'FATAL' -e 'ERROR')"
 AUDS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed')"
 FATS="$(echo "$LOG1H" 2>&1 | grep 'FATAL' | grep -v 'INFO')"
@@ -189,7 +188,7 @@ ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestor
 tmp_fatal_errors="$(echo "$FATS" 2>&1 | grep 'FATAL' -c)"
 tmp_audits_failed="$(echo "$AUDS" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed' -c)"
 tmp_rest_of_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' -c)"
-tmp_io_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' | grep -e 'i/o timeout' | grep -e 'ping satellite' -c)"
+tmp_io_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' | grep -e 'timeout' -c)"
 
 #echo "info $tmp_info"
 [[ "$VERBOSE" == "true" ]] && echo " *** audit error count : $tmp_audits_failed"
@@ -324,38 +323,49 @@ fi
 # CONCATENATE THE PUSH MESSAGE
 # ------------------------------------
 
+#reset DLOG
+DLOG=""
+
 if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]] && [[ $tmp_audits_failed -eq 0 ]]; then 
-	DLOG="**health check :** hdd $tmp_disk_usage; OK"
+	DLOG="**health check**"
+	if [[ ${#NODES[@]} -gt 1 ]]; then
+		DLOG="$DLOG [$NODE]"
+	fi
+	DLOG="$DLOG : hdd $tmp_disk_usage; OK."
 else
-	DLOG="**warning :**"
+	DLOG="**warning**"
+	if [[ ${#NODES[@]} -gt 1 ]]; then
+		DLOG="$DLOG [$NODE]"
+	fi
+	DLOG="$DLOG :"
 fi
 
 if [[ $tmp_audits_failed -ne 0 ]]; then
-	DLOG="$DLOG **AUDIT ERRORS** ($tmp_audits_failed; recoverable: $audit_recfailrate; critical: $audit_failrate);"
+	DLOG="$DLOG **AUDIT ERRORS** ($tmp_audits_failed; recoverable: $audit_recfailrate; critical: $audit_failrate)."
 fi
 
 if [[ $tmp_fatal_errors -ne 0 ]]; then
-	DLOG="$DLOG **FATAL ERRORS** ($tmp_fatal_errors);"
+	DLOG="$DLOG **FATAL ERRORS** ($tmp_fatal_errors)."
 fi
 
 if [[ $tmp_rest_of_errors -ne 0 ]]; then
 	if [[ $tmp_io_errors -ne $tmp_rest_of_errors ]]; then
-		DLOG="$DLOG **ERRORS FOUND** ($tmp_rest_of_errors);"
+		DLOG="$DLOG **ERRORS FOUND** ($tmp_rest_of_errors)."
 	else
-		DLOG="$DLOG (skipped io)"
+		DLOG="$DLOG (skipped io)."
 	fi
 fi
 
 if [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]]; then
-	DLOG="$DLOG; \nattention !! repair stats below threshold (download $get_repair_ratio_int / upload $put_repair_ratio_int: risk of getting disqualified)"
+	DLOG="$DLOG; \n.. attention !! repair stats below threshold (download $get_repair_ratio_int / upload $put_repair_ratio_int: risk of getting disqualified)"
 fi
 
 if [[ $gets_recent_hour -eq 0 ]] && [[ $puts_recent_hour -eq 0 ]]; then
-	DLOG="$DLOG; \nattention !! no get/put in last 1h - beware"
+	DLOG="$DLOG; \n.. attention !! no get/put in last 1h - beware"
 fi
 
 if [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]]; then
-	DLOG="$DLOG; \nattention !! get/put success ratio below threshold - beware (download $get_ratio_int / upload $put_ratio_int)"
+	DLOG="$DLOG; \n.. attention !! get/put success ratio below threshold - beware (download $get_ratio_int / upload $put_ratio_int)"
 fi
 [[ "$VERBOSE" == "true" ]] && echo " *** alert message prepared:"
 
@@ -422,31 +432,31 @@ fi
 if $MAILON; then
 
 if [[ $satellite_scores != "" ]]; then
-    swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : SATELLITE SCORES BELOW THRESHOLD" --body "$satellite_scores" --silent "1"
+    swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : SATELLITE SCORES BELOW THRESHOLD" --body "$satellite_scores" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** satellite warning mail sent."
 fi
 if [[ $tmp_fatal_errors -ne 0 ]]; then 
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : FATAL ERRORS FOUND" --body "$FATS" --silent "1"
+	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : FATAL ERRORS FOUND" --body "$FATS" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** fatal error mail sent."
 fi
 if [[ $tmp_rest_of_errors -ne 0 ]]; then
 	if $ignore_rest_of_errors; then
 		if [[ $DEB -eq 1 ]]; then
-			swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : OTHER ERRORS FOUND" --body "$ERRS" --silent "1"
-			[[ "$VERBOSE" == "true" ]] && echo " *** general error mail sent (ignore: $ignore_rest_of_errors)."
+			swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : OTHER ERRORS FOUND" --body "$ERRS" --silent "1"
+			[[ "$VERBOSE" == "true" ]] && echo " *** general error mail sent (ignore case: $ignore_rest_of_errors)."
 		fi
 	else
-		swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : OTHER ERRORS FOUND" --body "$ERRS" --silent "1"
-		[[ "$VERBOSE" == "true" ]] && echo " *** general error mail sent (ignore: $ignore_rest_of_errors)."
+		swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : OTHER ERRORS FOUND" --body "$ERRS" --silent "1"
+		[[ "$VERBOSE" == "true" ]] && echo " *** general error mail sent (ignore case: $ignore_rest_of_errors)."
 	fi
 fi
 if [[ $tmp_audits_failed -ne 0 ]]; then 
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : AUDIT ERRORS FOUND" --body "Recoverable: $audit_recfailrate \n\n$audit_failed_warn_text \n\nCritical: $audit_failrate \n\n$audit_failed_crit_text\n\nComplete: \n$AUDS \n\n$AUDS" --silent "1"
+	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : AUDIT ERRORS FOUND" --body "Recoverable: $audit_recfailrate \n\n$audit_failed_warn_text \n\nCritical: $audit_failrate \n\n$audit_failed_crit_text\n\nComplete: \n$AUDS \n\n$AUDS" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** audit error mail sent."
 fi
 # send debug mail 
 if [[ $DEB -eq 2 ]]; then
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : DEBUG TEST MAIL" --body "blobb." --silent "1"
+	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : DEBUG TEST MAIL" --body "blobb." --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** debut mail sent."
 fi
 
@@ -458,9 +468,9 @@ fi
 ###   if relevant for you, enable the mail alert below.
 else
 	if $DISCORDON; then
-	./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "**warning :** storagenode not running!"
+	./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "**warning :** $NODE not running!"
 	fi
-	#swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "STORAGENODE : NOT RUNNING" --body "warning: storage node is not running." --silent "1"
+	#swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : NOT RUNNING" --body "warning: storage node is not running." --silent "1"
 fi
 
 done # end of while command of storagenodes list
