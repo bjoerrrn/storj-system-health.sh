@@ -106,7 +106,11 @@ a message saying, that there are fatal errors
 
 another message saying, that there are general errors
 
-![fatal error message](/examples/discord-example-general-error.jpg)
+![general error message](/examples/discord-example-general-error.jpg)
+
+satellite score issues
+
+![satellite issues](/examples/discord-example-satellite-scores.jpg)
 
 
 ## contributing
