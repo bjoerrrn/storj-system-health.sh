@@ -13,6 +13,10 @@ this linux shell script checks, if a [storj node][storagenode] ([:storage node] 
 * optimized for crontab and command line usage 💻
 * only requires [curl][curl], [jq][jq] and [swaks][swaks] to run 🔥
 
+## optimzed / tested for
+- debian bullseye 🐧
+- macos monterey 🍎 (jq + swaks installed with brew)
+
 ## dependencies
 - [storj node][storagenode] node up and running, within a 
 - [docker][docker] container
