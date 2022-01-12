@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# v1.5.3
+# v1.5.4
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -45,6 +45,9 @@ do
 done
 shift $((OPTIND-1))
 
+# get current dir of this script
+DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
+
 [[ "$VERBOSE" == "true" ]] && [[ $DEB -eq 1 ]] && echo -e " *** discord debug mode on"
 [[ "$VERBOSE" == "true" ]] && [[ $DEB -eq 2 ]] && echo -e " *** mail debug mode on"
 
@@ -57,6 +60,13 @@ shift $((OPTIND-1))
 if [ ! -r "$config_file" ]
 then
     echo "fatal: config file $config_file not found / readable."
+    exit 2
+fi
+
+# check, if discord.sh script exists and is executable
+if [ ! -x "$DIR/discord.sh" ]
+then
+    echo "fatal: discord.sh does not exist or is not executable:$DIR/discord.sh"
     exit 2
 fi
 
@@ -477,6 +487,7 @@ fi
 # send discord ping
 if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_io_errors -ne $tmp_rest_of_errors ]] || [[ $tmp_audits_failed -ne 0 ]] || [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]] || [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]] || $tmp_no_getput_1h || [[ $DEB -eq 1 ]]; then 
     if $DISCORDON; then
+        cd $DIR
         { ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "$DLOG"; } 2>/dev/null
         [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent."
         if [[ $satellite_scores != "" ]]; then
@@ -533,6 +544,7 @@ fi
 ###   if relevant for you, enable the mail alert below.
 else
 	if $DISCORDON; then
+	    cd $DIR
 	    { ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "**warning :** $NODE not running!"; } 2>/dev/null
 	fi
 	#swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : NOT RUNNING" --body "warning: storage node is not running." --silent "1"
