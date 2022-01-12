@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# v1.5.3
+# v1.5.4
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -61,9 +61,7 @@ then
 fi
 
 # loads config data into variables 
-while IFS== read var values ; do
-    IFS=, read -a $var <<< "$values"
-done < "$config_file"
+{ while IFS== read var values ; do IFS=, read -a $var <<< "$values";  done < "$config_file"; } 2>/dev/null
 
 [[ -z "$DISCORDON" ]] && echo "fatal: DISCORDON not specified in .credo" && exit 2
 [[ -z "$DISCORDURL" ]] && echo "fatal: DISCORDURL not specified in .credo" && exit 2
@@ -138,7 +136,7 @@ node_url=${NODEURLS[$i]}
 satellite_scores=$(echo -E $(curl -s "$node_url/api/sno/satellites" |
 jq -r \
         --argjson auditScore 1 \
-        --argjson suspensionScore 1 \
+        --argjson suspensionScore 0.99 \
         --argjson onlineScore 0.95 \
         '.audits[] as $a | ($a.satelliteName | sub(":.*";"")) as $name |
         reduce ($ARGS.named|keys[]) as $key (
@@ -150,9 +148,9 @@ jq -r \
 [[ "$VERBOSE" == "true" ]] && echo " *** satellite scores selected."
 
 # docker log selection from the last 24 hours and 1 hour
-LOG1D="$(docker logs --since "$(date -d "$date -1 day" +"%Y-%m-%dT%H:%M")" $NODE 2>&1)"
+LOG1D="$(docker logs --since 24h $NODE 2>&1)"
 [[ "$VERBOSE" == "true" ]] && echo " *** docker log 1d selected."
-LOG1H="$(docker logs --since "$(date -d "$date -1 hour" +"%Y-%m-%dT%H:%M")" $NODE 2>&1)"
+LOG1H="$(docker logs --since 1h $NODE 2>&1)"
 [[ "$VERBOSE" == "true" ]] && echo " *** docker log 1h selected."
 
 # define audit variables, which are not used, in case there is no audit failure
@@ -163,6 +161,7 @@ audit_failed_crit=0
 audit_failed_crit_text=""
 audit_recfailrate=0.000%
 audit_failrate=0.000%
+audit_successrate=100.000%
 
 
 ### > check if storagenode is runnning; if not, cancel analysis and push / email alert
@@ -175,7 +174,7 @@ if [[ $RUNNING -eq 1 ]]; then
 # ------------------------------------
 
 # select error messages in detail (partially extracted text log)
-#INFO="$(echo "$LOG1H" 2>&1 | grep 'INFO' | grep -v -e 'FATAL' -e 'ERROR')"
+#INFO="$(echo "$LOG1H" 2>&1 | grep 'INFO' | grep -v -e 'FATAL' -v -e 'ERROR')"
 AUDS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed')"
 FATS="$(echo "$LOG1H" 2>&1 | grep 'FATAL' | grep -v 'INFO')"
 ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter')"
@@ -213,8 +212,14 @@ if [[ $tmp_audits_failed -ne 0 ]]; then
 	then
 		audit_failrate=$(printf '%.3f\n' $(echo -e "$audit_failed_crit $audit_failed_warn $audit_success" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
 	fi
+	if [ $(($audit_success+$audit_failed_crit+$audit_failed_warn)) -ge 1 ]
+    then
+	    audit_successrate=$(printf '%.3f\n' $(echo -e "$audit_success $audit_failed_crit $audit_failed_warn" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+    else
+	    audit_successrate=0.000%
+    fi
 fi
-[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : audits"
+[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : audits (rec: $audit_recfailrate, crit: $audit_failrate, s: $audit_successrate)"
 
 
 ## download stats
@@ -226,13 +231,27 @@ dl_success=$(echo "$LOG1D" 2>&1 | grep '"GET"' | grep 'downloaded' -c)
 dl_canceled=$(echo "$LOG1D" 2>&1 | grep '"GET"' | grep 'download canceled' -c)
 #Failed Downloads from your node
 dl_failed=$(echo "$LOG1D" 2>&1 | grep '"GET"' | grep 'download failed' -c)
+#Ratio of canceled Downloads
+if [ $(($dl_success+$dl_failed+$dl_canceled)) -ge 1 ]
+then
+	dl_canratio=$(printf '%.3f\n' $(echo -e "$dl_canceled $dl_success $dl_failed" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+else
+	dl_canratio=0.000%
+fi
+#Ratio of Failed Downloads
+if [ $(($dl_success+$dl_failed+$dl_canceled)) -ge 1 ]
+then
+	dl_failratio=$(printf '%.3f\n' $(echo -e "$dl_failed $dl_success $dl_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+else
+	dl_failratio=0.000%
+fi
 #Ratio of Successful Downloads
 get_ratio_int=0
 if [ $(($dl_success+$dl_failed+$dl_canceled)) -ge 1 ]
 then
 	get_ratio_int=$(printf '%.0f\n' $(echo -e "$dl_success $dl_failed $dl_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))
 fi
-[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : downloads"
+[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : downloads (c: $dl_canratio, f: $dl_failratio, s: $get_ratio_int%)"
 
 
 ## upload stats
@@ -246,13 +265,34 @@ put_rejected=$(echo "$LOG1D" 2>&1 | grep 'upload rejected' -c)
 put_canceled=$(echo "$LOG1D" 2>&1 | grep '"PUT"' | grep 'upload canceled' -c)
 #count of failed uploads to your node
 put_failed=$(echo "$LOG1D" 2>&1 | grep '"PUT"' | grep 'upload failed' -c)
+#Ratio of Rejections
+if [ $(($put_success+$put_rejected+$put_canceled+$put_failed)) -ge 1 ]
+then
+	put_accept_ratio=$(printf '%.3f\n' $(echo -e "$put_rejected $put_success $put_canceled $put_failed" | awk '{print ( ($2 + $3 + $4) / ( $1 + $2 + $3 + $4 )) * 100 }'))%
+else
+	put_accept_ratio=0.000%
+fi
+#Ratio of Failed
+if [ $(($put_success+$put_rejected+$put_canceled+$put_failed)) -ge 1 ]
+then
+	put_fail_ratio=$(printf '%.3f\n' $(echo -e "$put_failed $put_success $put_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+else
+	put_fail_ratio=0.000%
+fi
+#Ratio of canceled
+if [ $(($put_success+$put_rejected+$put_canceled+$put_failed)) -ge 1 ]
+then
+	put_cancel_ratio=$(printf '%.3f\n' $(echo -e "$put_canceled $put_failed $put_success" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+else
+	put_cancel_ratio=0.000%
+fi
 #Ratio of Success
 put_ratio_int=0
 if [ $(($put_success+$put_canceled+$put_failed)) -ge 1 ]
 then
 	put_ratio_int=$(printf '%.0f\n' $(echo -e "$put_success $put_failed $put_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))
 fi
-[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : uploads"
+[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : uploads (a: $put_accept_ratio, c: $put_cancel_ratio, f: $put_fail_ratio, s: $put_ratio_int%)"
 
 
 ## repair download & upload stats
@@ -264,13 +304,27 @@ get_repair_success=$(echo "$LOG1D" 2>&1 | grep GET_REPAIR | grep downloaded -c)
 get_repair_failed=$(echo "$LOG1D" 2>&1 | grep GET_REPAIR | grep 'download failed' -c)
 #count of canceled downloads of pieces for repair process
 get_repair_canceled=$(echo "$LOG1D" 2>&1 | grep GET_REPAIR | grep 'download canceled' -c)
+#Ratio of Fail GET_REPAIR
+if [ $(($get_repair_success+$get_repair_failed+$get_repair_canceled)) -ge 1 ]
+then
+	get_repair_failratio=$(printf '%.3f\n' $(echo -e "$get_repair_failed $get_repair_success $get_repair_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+else
+	get_repair_failratio=0.000%
+fi
+#Ratio of Cancel GET_REPAIR
+if [ $(($get_repair_success+$get_repair_failed+$get_repair_canceled)) -ge 1 ]
+then
+	get_repair_canratio=$(printf '%.3f\n' $(echo -e "$get_repair_canceled $get_repair_success $get_repair_failed" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+else
+	get_repair_canratio=0.000%
+fi
 #Ratio of Success GET_REPAIR
 get_repair_ratio_int=0
 if [ $(($get_repair_success+$get_repair_failed+$get_repair_canceled)) -ge 1 ]
 then
 	get_repair_ratio_int=$(printf '%.0f\n' $(echo -e "$get_repair_success $get_repair_failed $get_repair_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))
 fi
-[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : repair downloads"
+[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : repair downloads (c: $get_repair_canratio, f: $get_repair_failratio, s: $get_repair_ratio_int%)"
 
 #count of successful uploads of repaired pieces
 put_repair_success=$(echo "$LOG1D" 2>&1 | grep PUT_REPAIR | grep uploaded -c)
@@ -278,13 +332,27 @@ put_repair_success=$(echo "$LOG1D" 2>&1 | grep PUT_REPAIR | grep uploaded -c)
 put_repair_canceled=$(echo "$LOG1D" 2>&1 | grep PUT_REPAIR | grep 'upload canceled' -c)
 #count of failed uploads repaired pieces
 put_repair_failed=$(echo "$LOG1D" 2>&1 | grep PUT_REPAIR | grep 'upload failed' -c)
+#Ratio of Fail PUT_REPAIR
+if [ $(($put_repair_success+$put_repair_failed+$put_repair_canceled)) -ge 1 ]
+then
+	put_repair_failratio=$(printf '%.3f\n' $(echo -e "$put_repair_failed $put_repair_success $put_repair_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+else
+	put_repair_failratio=0.000%
+fi
+#Ratio of Cancel PUT_REPAIR
+if [ $(($put_repair_success+$put_repair_failed+$put_repair_canceled)) -ge 1 ]
+then
+	put_repair_canratio=$(printf '%.3f\n' $(echo -e "$put_repair_canceled $put_repair_success $put_repair_failed" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+else
+	put_repair_canratio=0.000%
+fi
 #Ratio of Success PUT_REPAIR
 put_repair_ratio_int=0
 if [ $(($put_repair_success+$put_repair_failed+$put_repair_canceled)) -ge 1 ]
 then
 	put_repair_ratio_int=$(printf '%.0f\n' $(echo -e "$put_repair_success $put_repair_failed $put_repair_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))
 fi
-[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : repair uploads"
+[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : repair uploads (c: $put_repair_canratio, f: $put_repair_failratio, s: $put_repair_ratio_int%)"
 
 
 ## count upload and download activity last hour
@@ -409,10 +477,10 @@ fi
 # send discord ping
 if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_io_errors -ne $tmp_rest_of_errors ]] || [[ $tmp_audits_failed -ne 0 ]] || [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]] || [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]] || $tmp_no_getput_1h || [[ $DEB -eq 1 ]]; then 
     if $DISCORDON; then
-        ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "$DLOG"
+        { ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "$DLOG"; } 2>/dev/null
         [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent."
         if [[ $satellite_scores != "" ]]; then
-        	./discord.sh --webhook-url="$DISCORDURL" --username "storj warning" --text "**warning :** satellite scores issue --> $satellite_scores"
+        	{ ./discord.sh --webhook-url="$DISCORDURL" --username "storj warning" --text "**warning :** satellite scores issue --> $satellite_scores"; } 2>/dev/null
         	[[ "$VERBOSE" == "true" ]] && echo " *** discord satellite push sent."
         fi
     fi
@@ -465,7 +533,7 @@ fi
 ###   if relevant for you, enable the mail alert below.
 else
 	if $DISCORDON; then
-	./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "**warning :** $NODE not running!"
+	    { ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "**warning :** $NODE not running!"; } 2>/dev/null
 	fi
 	#swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : NOT RUNNING" --body "warning: storage node is not running." --silent "1"
 fi
