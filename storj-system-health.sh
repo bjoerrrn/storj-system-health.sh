@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# v1.5.3
+# v1.5.4
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -422,15 +422,15 @@ if [[ $tmp_rest_of_errors -ne 0 ]]; then
 fi
 
 if [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]]; then
-	DLOG="$DLOG; \n.. attention !! repair stats below threshold (download $get_repair_ratio_int / upload $put_repair_ratio_int: risk of getting disqualified)"
+	DLOG="$DLOG; \n.. attention !! repair down $get_repair_ratio_int / up $put_repair_ratio_int \n-> risk of getting disqualified"
 fi
 
 if [[ $gets_recent_hour -eq 0 ]] && [[ $puts_recent_hour -eq 0 ]]; then
-	DLOG="$DLOG; \n.. attention !! no get/put in last 1h - beware"
+	DLOG="$DLOG; \n.. attention !! no get/put in last 1h"
 fi
 
 if [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]]; then
-	DLOG="$DLOG; \n.. attention !! get/put success ratio below threshold - beware (download $get_ratio_int / upload $put_ratio_int)"
+	DLOG="$DLOG; \n.. attention !! download $get_ratio_int / upload $put_ratio_int low"
 fi
 [[ "$VERBOSE" == "true" ]] && echo " *** alert message prepared:"
 
