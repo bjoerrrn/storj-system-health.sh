@@ -1,6 +1,6 @@
-#!/usr/bin/env bash
+#!/bin/bash
 #
-# v1.5.4
+# v1.5.5
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -30,15 +30,17 @@ General options:
   -c <path>     Use individual file path for properties
   -d            Debug mode: send discord push if health check ok
   -m            Debug mode: dpush + test mail settings with test mail
+  -p <path>     Provide a path to support crontab on MacOS
   -v            Verbose option to enable console output while execution"
 
 
-while getopts ":hc:dmv" flag
+while getopts ":hc:dmp:v" flag
 do
     case "${flag}" in
         c) config_file=${OPTARG};;
         d) DEB=1;;
         m) DEB=2;;
+        p) PATH=${OPTARG};;
         v) VERBOSE=true;;
         h | *) echo "$help_text" && exit 0;;
     esac
@@ -143,6 +145,7 @@ RUNNING="$(echo "$DOCKERPS" 2>&1 | grep "$NODE" -c)"
 
 # grab satellite scores
 node_url=${NODEURLS[$i]}
+[[ "$VERBOSE" == "true" ]] && echo " *** satellite scores url : $node_url"
 satellite_scores=$(echo -E $(curl -s "$node_url/api/sno/satellites" |
 jq -r \
         --argjson auditScore 1 \
@@ -159,9 +162,11 @@ jq -r \
 
 # docker log selection from the last 24 hours and 1 hour
 LOG1D="$(docker logs --since 24h $NODE 2>&1)"
-[[ "$VERBOSE" == "true" ]] && echo " *** docker log 1d selected."
+[[ "$VERBOSE" == "true" ]] && tmp_count="$(docker logs --since 24h $NODE 2>&1 | grep '' -c)"
+[[ "$VERBOSE" == "true" ]] && echo " *** docker log 1d selected (#$tmp_count)."
 LOG1H="$(docker logs --since 1h $NODE 2>&1)"
-[[ "$VERBOSE" == "true" ]] && echo " *** docker log 1h selected."
+[[ "$VERBOSE" == "true" ]] && tmp_count="$(docker logs --since 1h $NODE 2>&1 | grep '' -c)"
+[[ "$VERBOSE" == "true" ]] && echo " *** docker log 1h selected (#$tmp_count)."
 
 # define audit variables, which are not used, in case there is no audit failure
 audit_success=0
@@ -184,23 +189,23 @@ if [[ $RUNNING -eq 1 ]]; then
 # ------------------------------------
 
 # select error messages in detail (partially extracted text log)
-#INFO="$(echo "$LOG1H" 2>&1 | grep 'INFO' | grep -v -e 'FATAL' -v -e 'ERROR')"
+[[ "$VERBOSE" == "true" ]] && INFO="$(echo "$LOG1H" 2>&1 | grep 'INFO')"
 AUDS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed')"
 FATS="$(echo "$LOG1H" 2>&1 | grep 'FATAL' | grep -v 'INFO')"
 ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter')"
 
 # count errors 
-#tmp_info="$(echo "$INFO" 2>&1 | grep 'INFO' -c)"
+[[ "$VERBOSE" == "true" ]] && tmp_info="$(echo "$INFO" 2>&1 | grep 'INFO' -c)"
 tmp_fatal_errors="$(echo "$FATS" 2>&1 | grep 'FATAL' -c)"
 tmp_audits_failed="$(echo "$AUDS" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed' -c)"
 tmp_rest_of_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' -c)"
 tmp_io_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' | grep -e 'timeout' -c)"
 
-#echo "info $tmp_info"
-[[ "$VERBOSE" == "true" ]] && echo " *** audit error count : $tmp_audits_failed"
-[[ "$VERBOSE" == "true" ]] && echo " *** fatal error count : $tmp_fatal_errors"
-[[ "$VERBOSE" == "true" ]] && echo " *** other error count : $tmp_rest_of_errors"
-[[ "$VERBOSE" == "true" ]] && echo " *** i/o timouts count : $tmp_io_errors"
+[[ "$VERBOSE" == "true" ]] && echo " *** info count        : #$tmp_info"
+[[ "$VERBOSE" == "true" ]] && echo " *** audit error count : #$tmp_audits_failed"
+[[ "$VERBOSE" == "true" ]] && echo " *** fatal error count : #$tmp_fatal_errors"
+[[ "$VERBOSE" == "true" ]] && echo " *** other error count : #$tmp_rest_of_errors"
+[[ "$VERBOSE" == "true" ]] && echo " *** i/o timouts count : #$tmp_io_errors"
 
 
 ## in case of audit issues, select and share details (recoverable or critical)
@@ -373,7 +378,7 @@ puts_recent_hour=$(echo "$LOG1H" 2>&1 | grep '"PUT"' -c)
 tmp_no_getput_1h=false
 [[ $gets_recent_hour -eq 0 ]] && tmp_no_getput_1h=true
 [[ $puts_recent_hour -eq 0 ]] && tmp_no_getput_1h=true
-[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : 1h activity ($tmp_no_getput_1h)"
+[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : 1h activity ($gets_recent_hour/$puts_recent_hour/$tmp_no_getput_1h)"
 
 
 # ignore i/o timeouts (satellite service pings + single satellite connects), if audit success rate is 100% and there are no other errors as well
