@@ -92,11 +92,21 @@ it also supports a help command for further details:
 ```
 
 ## automation with crontab
-to let the health check run automatically, here’s a crontab example, which runs the script each hour: 
+to let the health check run automatically, here’s a crontab example for linux, which runs the script each hour.
 ```
 0  *    * * *   pi      /home/pi/storj-checks.sh
 ```
 
+for macos please be aware of the following specifics:
+* use `crontab -e` and `crontab -l`, although it is depricated (for now it works)
+* you do not have to use the user name, it's run with the current user
+* use full paths to your script and credo file
+* find out your standard path with `echo §PATH` and set it in crontab
+```
+SHELL=/bin/sh
+PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+40    *  *  *  * /Users/me/storj-checks.sh -d -c /Users/me/my.credo >> /Users/me/err.txt 2>&1
+```
 
 ## example screenshots
 
