@@ -18,9 +18,20 @@ renice 19 $$
 # CHECK AND HANDLE PARAMETERS
 # ------------------------------------
 
-config_file="./storj-system-health.credo" # default value
-DEB=0 # default value
-VERBOSE=false # default value
+# default values
+
+config_file="./storj-system-health.credo"      # config file path
+settings_file=".storj-system-health"           # settings file path
+
+DEB=0                                          # debug mode flag
+VERBOSE=false                                  # verbose mode flag
+satellite_notification=false                   # send satellite notification flag
+
+settings_satellite_key="satping"               # settings satellite ping key
+settings_satellite_value_now=$(date +'%Y%m%d') # settings satellite ping value 
+
+# help text
+
 readonly help_text="Usage: $0 [OPTIONS]
 
 Example: $0 -dv
@@ -28,16 +39,19 @@ Example: $0 -dv
 General options:
   -h            Display this help and exit
   -c <path>     Use individual file path for properties
+  -s <path>     Use individual fiel path for settings
   -d            Debug mode: send discord push if health check ok
-  -m            Debug mode: dpush + test mail settings with test mail
+  -m            Debug mode: discord push + test settings by sending test mail
   -p <path>     Provide a path to support crontab on MacOS
   -v            Verbose option to enable console output while execution"
 
+# parameter handling
 
-while getopts ":hc:dmp:v" flag
+while getopts ":hc:s:dmp:v" flag
 do
     case "${flag}" in
         c) config_file=${OPTARG};;
+        s) settings_file=${OPTARG};;
         d) DEB=1;;
         m) DEB=2;;
         p) PATH=${OPTARG};;
@@ -55,15 +69,24 @@ DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
 
 
 # =============================================================================
-# DEFINE VARIABLES AND CONSTANTS
+# DEFINE FUNCTIONS
 # ------------------------------------
 
-# check, if config file exists and is readable
-if [ ! -r "$config_file" ]
-then
-    echo "fatal: config file $config_file not found / readable."
-    exit 2
-fi
+function updateSettingsSatellitePing() {
+    sed -i -e "s/$settings_satellite_key=$satping/$settings_satellite_key=$settings_satellite_value_now/g" "$settings_file"
+    [[ "$VERBOSE" == "true" ]] && echo " *** settings: latest satellite ping saved [$settings_satellite_value_now]."
+}
+
+function restoreSettings() {
+    [[ "$VERBOSE" == "true" ]] && echo " *** settings: restoring file:"
+    echo "$settings_satellite_key=$settings_satellite_value_now" > $settings_file
+    [[ "$VERBOSE" == "true" ]] && echo " *** settings: latest satellite ping saved [$settings_satellite_value_now]."
+    # .. other values to be appended with >> instead of > !
+}
+
+# =============================================================================
+# DEFINE VARIABLES AND CONSTANTS
+# ------------------------------------
 
 # check, if discord.sh script exists and is executable
 if [ ! -x "$DIR/discord.sh" ]
@@ -72,25 +95,58 @@ then
     exit 2
 fi
 
-# loads config data into variables 
-{ while IFS== read var values ; do IFS=, read -a $var <<< "$values";  done < "$config_file"; } 2>/dev/null
 
-[[ -z "$DISCORDON" ]] && echo "fatal: DISCORDON not specified in .credo" && exit 2
-[[ -z "$DISCORDURL" ]] && echo "fatal: DISCORDURL not specified in .credo" && exit 2
-[[ -z "$MAILON" ]] && echo "fatal: MAILON not specified in .credo" && exit 2
-[[ -z "$MAILFROM" ]] && echo "fatal: MAILFROM not specified in .credo" && exit 2
-[[ -z "$MAILTO" ]] && echo "fatal: MAILTO not specified in .credo" && exit 2
-[[ -z "$MAILSERVER" ]] && echo "fatal: MAILSERVER not specified in .credo" && exit 2
-[[ -z "$MAILUSER" ]] && echo "fatal: MAILUSER not specified in .credo" && exit 2
-[[ -z "$MAILPASS" ]] && echo "fatal: MAILPASS not specified in .credo" && exit 2
-[[ -z "$NODES" ]] && echo "failure: NODES not specified in .credo" && exit 2
-[[ -z "$MOUNTPOINTS" ]] && echo "failure: MOUNTPOINTS not specified in .credo" && exit 2
-[[ -z "$NODEURLS" ]] && echo "failure: NODEURLS not specified in .credo" && exit 2
-[[ ${#MOUNTPOINTS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and MOUNTPOINTS do not match in .credo" && exit 2
-[[ ${#NODEURLS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and NODEURLS do not match in .credo" && exit 2
+# check, if config file exists and is readable
+if [ ! -r "$config_file" ]
+then
+    echo "fatal: config file $config_file not found / readable."
+    exit 2
+else 
+    # loads config data into variables 
+    { while IFS== read var values ; do IFS=, read -a $var <<< "$values";  done < "$config_file"; } 2>/dev/null
 
-[[ "$VERBOSE" == "true" ]] && echo " *** config file loaded"
+    [[ -z "$DISCORDON" ]] && echo "fatal: DISCORDON not specified in .credo" && exit 2
+    [[ -z "$DISCORDURL" ]] && echo "fatal: DISCORDURL not specified in .credo" && exit 2
+    [[ -z "$MAILON" ]] && echo "fatal: MAILON not specified in .credo" && exit 2
+    [[ -z "$MAILFROM" ]] && echo "fatal: MAILFROM not specified in .credo" && exit 2
+    [[ -z "$MAILTO" ]] && echo "fatal: MAILTO not specified in .credo" && exit 2
+    [[ -z "$MAILSERVER" ]] && echo "fatal: MAILSERVER not specified in .credo" && exit 2
+    [[ -z "$MAILUSER" ]] && echo "fatal: MAILUSER not specified in .credo" && exit 2
+    [[ -z "$MAILPASS" ]] && echo "fatal: MAILPASS not specified in .credo" && exit 2
+    [[ -z "$NODES" ]] && echo "failure: NODES not specified in .credo" && exit 2
+    [[ -z "$MOUNTPOINTS" ]] && echo "failure: MOUNTPOINTS not specified in .credo" && exit 2
+    [[ -z "$NODEURLS" ]] && echo "failure: NODEURLS not specified in .credo" && exit 2
+    [[ ${#MOUNTPOINTS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and MOUNTPOINTS do not match in .credo" && exit 2
+    [[ ${#NODEURLS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and NODEURLS do not match in .credo" && exit 2
 
+    [[ "$VERBOSE" == "true" ]] && echo " *** config file loaded"
+fi
+
+
+# loads settings file into variables
+if [ ! -r "$settings_file" ]; then
+    # if not existing or readable, create a new file
+    restoreSettings
+else
+    # if existing and readable, read its content
+    while IFS== read var values
+    do
+        IFS=, read -a $var <<< "$values"
+    done < "$settings_file"
+    if [[ -z "$satping" ]]
+    then
+        [[ "$VERBOSE" == "true" ]] && echo "warning: settings: satping not found."
+        updateSettingsSatellitePing
+    fi
+    # compare, if dates are equal or not
+    # if unequal, perform satellite notification, else not
+    if [[ $satping != $settings_satellite_value_now ]]
+    then
+        satellite_notification=true  # do perform the satellite notification
+        updateSettingsSatellitePing  # replace old date with current date
+    fi
+    [[ "$VERBOSE" == "true" ]] && echo " *** settings: satellite pings will be sent: $satellite_notification"
+fi 
 
 
 # =============================================================================
@@ -192,7 +248,7 @@ if [[ $RUNNING -eq 1 ]]; then
 [[ "$VERBOSE" == "true" ]] && INFO="$(echo "$LOG1H" 2>&1 | grep 'INFO')"
 AUDS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed')"
 FATS="$(echo "$LOG1H" 2>&1 | grep 'FATAL' | grep -v 'INFO')"
-ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter')"
+ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed')"
 
 # count errors 
 [[ "$VERBOSE" == "true" ]] && tmp_info="$(echo "$INFO" 2>&1 | grep 'INFO' -c)"
@@ -411,7 +467,7 @@ if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]]
 	if [[ ${#NODES[@]} -gt 1 ]]; then
 		DLOG="$DLOG [$NODE]"
 	fi
-	DLOG="$DLOG : hdd $tmp_disk_usage; OK."
+	DLOG="$DLOG : hdd $tmp_disk_usage < OK >"
 else
 	DLOG="**warning**"
 	if [[ ${#NODES[@]} -gt 1 ]]; then
@@ -421,18 +477,18 @@ else
 fi
 
 if [[ $tmp_audits_failed -ne 0 ]]; then
-	DLOG="$DLOG **AUDIT ERRORS** ($tmp_audits_failed; recoverable: $audit_recfailrate; critical: $audit_failrate)."
+	DLOG="$DLOG **AUDIT ERRORS** ($tmp_audits_failed; recoverable: $audit_recfailrate; critical: $audit_failrate)"
 fi
 
 if [[ $tmp_fatal_errors -ne 0 ]]; then
-	DLOG="$DLOG **FATAL ERRORS** ($tmp_fatal_errors)."
+	DLOG="$DLOG **FATAL ERRORS** ($tmp_fatal_errors)"
 fi
 
 if [[ $tmp_rest_of_errors -ne 0 ]]; then
 	if [[ $tmp_io_errors -ne $tmp_rest_of_errors ]]; then
-		DLOG="$DLOG **ERRORS FOUND** ($tmp_rest_of_errors)."
+		DLOG="$DLOG **ERRORS FOUND** ($tmp_rest_of_errors)"
 	else
-		DLOG="$DLOG (skipped io)."
+		DLOG="$DLOG (skipped io)"
 	fi
 fi
 
@@ -495,7 +551,8 @@ if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_io_errors -ne $tmp_rest_of_errors ]]
         cd $DIR
         { ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "$DLOG"; } 2>/dev/null
         [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent."
-        if [[ $satellite_scores != "" ]]; then
+        if [[ $satellite_scores != "" ]] && $satellite_notification
+        then
         	{ ./discord.sh --webhook-url="$DISCORDURL" --username "storj warning" --text "**warning :** satellite scores issue --> $satellite_scores"; } 2>/dev/null
         	[[ "$VERBOSE" == "true" ]] && echo " *** discord satellite push sent."
         fi
@@ -512,7 +569,7 @@ fi
 # send email alerts
 if $MAILON; then
 
-if [[ $satellite_scores != "" ]]; then
+if [[ $satellite_scores != "" ]] && $satellite_notification; then
     swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : SATELLITE SCORES BELOW THRESHOLD" --body "$satellite_scores" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** satellite warning mail sent."
 fi
