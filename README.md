@@ -28,10 +28,13 @@ this linux shell script checks, if a [storj node][storagenode] ([:storage node] 
 ## setting up storj system health
 1. optional: [setup a webhook][webhook] in the desired discord text channel
 2. optional: grab your smtp email authentication data
-3. download (or clone) a copy of `discord.sh`, <br/>e.g. by `wget https://raw.githubusercontent.com/ChaoticWeg/discord.sh/master/discord.sh`
-4. download (or clone) a copy of `storj-system-health.sh` and `storj-system-health.credo`, <br/>e.g. by `wget https://raw.githubusercontent.com/dusselmann/storj-system-health.sh/main/storj-system-health.sh` and `wget https://raw.githubusercontent.com/dusselmann/storj-system-health.sh/main/storj-system-health.credo`
+3. download (or clone) a copy of `discord.sh` *
+4. download (or clone) a copy of `storj-system-health.sh` and `storj-system-health.credo` **
 5. optional: setup discord and mail variables in `storj-system-health.credo`
-6. Go nuts.
+6. Go nuts 🚀
+
+\* `wget https://raw.githubusercontent.com/ChaoticWeg/discord.sh/master/discord.sh` <br/>
+\*\* `wget https://raw.githubusercontent.com/dusselmann/storj-system-health.sh/main/storj-system-health.sh && wget https://raw.githubusercontent.com/dusselmann/storj-system-health.sh/main/storj-system-health.credo`
 
 ## setting up variables in *.credo
 you will need to modify these variables in `*.credo` for your specific node and smtp mail server configuration. the `*.credo` file must not include comments and blank lines, the following description is just for your explanation:
