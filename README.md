@@ -11,7 +11,7 @@ this linux shell script checks, if a [storj node][storagenode] ([:storage node] 
 * alerts if there was no get/put at all in the last hour (storj node discqualification risk) ⚠️
 * alerts in case the node is offline (docker container not started) ⚠️
 * optimized for crontab and command line usage 💻
-* only requires [curl][curl], [jq][jq] and [swaks][swaks] to run 🔥
+* only requires [curl][curl], [jq][jq] and [swaks][swaks] to run 🔥 
 
 ## optimzed / tested for
 - debian bullseye 🐧
@@ -28,8 +28,8 @@ this linux shell script checks, if a [storj node][storagenode] ([:storage node] 
 ## setting up storj system health
 1. optional: [setup a webhook][webhook] in the desired discord text channel
 2. optional: grab your smtp email authentication data
-3. download (or clone) a copy of `discord.sh`
-4. download (or clone) a copy of `storj-system-health.sh` and `storj-system-health.credo`
+3. download (or clone) a copy of `discord.sh`, <br/>e.g. by `wget https://raw.githubusercontent.com/ChaoticWeg/discord.sh/master/discord.sh`
+4. download (or clone) a copy of `storj-system-health.sh` and `storj-system-health.credo`, <br/>e.g. by `wget https://raw.githubusercontent.com/dusselmann/storj-system-health.sh/main/storj-system-health.sh` and `wget https://raw.githubusercontent.com/dusselmann/storj-system-health.sh/main/storj-system-health.credo`
 5. optional: setup discord and mail variables in `storj-system-health.credo`
 6. Go nuts.
 
@@ -94,7 +94,7 @@ it also supports a help command for further details:
 ## automation with crontab
 to let the health check run automatically, here’s a crontab example for linux, which runs the script each hour.
 ```
-0  *    * * *   pi      /home/pi/storj-checks.sh
+0  *    * * *   pi      /home/pi/storj-checks.sh -d  > /dev/null
 ```
 
 for macos please be aware of the following specifics:
@@ -129,7 +129,7 @@ satellite score issues
 
 ## contributing
 
-pull requests are welcome. for major changes, please open an issue first to discuss what you would like to change.
+[issues](https://github.com/dusselmann/storj-system-health.sh/issues) and [pull requests](https://github.com/dusselmann/storj-system-health.sh/pulls) are welcome. for major changes, please open an [issue](https://github.com/dusselmann/storj-system-health.sh/issues) first to discuss what you would like to change.
 
 ## license
 
