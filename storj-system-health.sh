@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.5.5
+# v1.5.6
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -64,6 +64,8 @@ shift $((OPTIND-1))
 # get current dir of this script
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
 
+
+[[ "$VERBOSE" == "true" ]] && echo -e " *** timestamp [$(date +'%d.%m.%Y %H:%M')]"
 [[ "$VERBOSE" == "true" ]] && [[ $DEB -eq 1 ]] && echo -e " *** discord debug mode on"
 [[ "$VERBOSE" == "true" ]] && [[ $DEB -eq 2 ]] && echo -e " *** mail debug mode on"
 
@@ -136,7 +138,8 @@ else
     if [[ -z "$satping" ]]
     then
         [[ "$VERBOSE" == "true" ]] && echo "warning: settings: satping not found."
-        updateSettingsSatellitePing
+        satellite_notification=true  # do perform the satellite notification
+        updateSettingsSatellitePing  # set current date
     fi
     # compare, if dates are equal or not
     # if unequal, perform satellite notification, else not
@@ -202,6 +205,9 @@ RUNNING="$(echo "$DOCKERPS" 2>&1 | grep "$NODE" -c)"
 # grab satellite scores
 node_url=${NODEURLS[$i]}
 [[ "$VERBOSE" == "true" ]] && echo " *** satellite scores url : $node_url"
+# check availability of api/sno/satellites
+satellite_info_fulltext=$(echo -E $(curl -s "$node_url/api/sno/satellites"))
+[ -z "$satellite_info_fulltext" ] && [[ "$VERBOSE" == "true" ]] && echo "warning : satellite's info not available, please verify: $node_url/api/sno/satellites"
 satellite_scores=$(echo -E $(curl -s "$node_url/api/sno/satellites" |
 jq -r \
         --argjson auditScore 1 \
@@ -214,7 +220,7 @@ jq -r \
                         . + ["\($key) \(100*$a[$key]|floor)% @ \($name) ... "]
                 ) else . end
                 ) | .[]'))
-[[ "$VERBOSE" == "true" ]] && echo " *** satellite scores selected."
+[ ! -z "$satellite_info_fulltext" ] && [[ "$VERBOSE" == "true" ]] && echo " *** satellite scores selected."
 
 # docker log selection from the last 24 hours and 1 hour
 LOG1D="$(docker logs --since 24h $NODE 2>&1)"
@@ -250,16 +256,22 @@ AUDS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed')"
 FATS="$(echo "$LOG1H" 2>&1 | grep 'FATAL' | grep -v 'INFO')"
 ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed')"
 
+# added "severe" errors in order to recognize e.g. docker issues, connectivity issues etc.
+# those are not recognized normally in the above shown triggers, so adding it here:
+SEVERE="$(echo "$LOG1H" 2>&1 | grep -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' | grep -v -e 'emptying trash failed')"
+
 # count errors 
 [[ "$VERBOSE" == "true" ]] && tmp_info="$(echo "$INFO" 2>&1 | grep 'INFO' -c)"
 tmp_fatal_errors="$(echo "$FATS" 2>&1 | grep 'FATAL' -c)"
 tmp_audits_failed="$(echo "$AUDS" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed' -c)"
 tmp_rest_of_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' -c)"
 tmp_io_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' | grep -e 'timeout' -c)"
+temp_severe_errors="$(echo "$SEVERE" 2>&1 | grep -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -c)"
 
 [[ "$VERBOSE" == "true" ]] && echo " *** info count        : #$tmp_info"
 [[ "$VERBOSE" == "true" ]] && echo " *** audit error count : #$tmp_audits_failed"
 [[ "$VERBOSE" == "true" ]] && echo " *** fatal error count : #$tmp_fatal_errors"
+[[ "$VERBOSE" == "true" ]] && echo " *** severe count      : #$temp_severe_errors"
 [[ "$VERBOSE" == "true" ]] && echo " *** other error count : #$tmp_rest_of_errors"
 [[ "$VERBOSE" == "true" ]] && echo " *** i/o timouts count : #$tmp_io_errors"
 
@@ -290,7 +302,7 @@ if [[ $tmp_audits_failed -ne 0 ]]; then
 	    audit_successrate=0.000%
     fi
 fi
-[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : audits (rec: $audit_recfailrate, crit: $audit_failrate, s: $audit_successrate)"
+[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : audits           (rec: $audit_recfailrate, crit: $audit_failrate, s: $audit_successrate)"
 
 
 ## download stats
@@ -322,7 +334,7 @@ if [ $(($dl_success+$dl_failed+$dl_canceled)) -ge 1 ]
 then
 	get_ratio_int=$(printf '%.0f\n' $(echo -e "$dl_success $dl_failed $dl_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))
 fi
-[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : downloads (c: $dl_canratio, f: $dl_failratio, s: $get_ratio_int%)"
+[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : downloads        (c: $dl_canratio, f: $dl_failratio, s: $get_ratio_int%)"
 
 
 ## upload stats
@@ -363,7 +375,7 @@ if [ $(($put_success+$put_canceled+$put_failed)) -ge 1 ]
 then
 	put_ratio_int=$(printf '%.0f\n' $(echo -e "$put_success $put_failed $put_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))
 fi
-[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : uploads (a: $put_accept_ratio, c: $put_cancel_ratio, f: $put_fail_ratio, s: $put_ratio_int%)"
+[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : uploads          (c: $put_cancel_ratio, f: $put_fail_ratio, s: $put_ratio_int%)"
 
 
 ## repair download & upload stats
@@ -423,7 +435,7 @@ if [ $(($put_repair_success+$put_repair_failed+$put_repair_canceled)) -ge 1 ]
 then
 	put_repair_ratio_int=$(printf '%.0f\n' $(echo -e "$put_repair_success $put_repair_failed $put_repair_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))
 fi
-[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : repair uploads (c: $put_repair_canratio, f: $put_repair_failratio, s: $put_repair_ratio_int%)"
+[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : repair uploads   (c: $put_repair_canratio, f: $put_repair_failratio, s: $put_repair_ratio_int%)"
 
 
 ## count upload and download activity last hour
@@ -434,7 +446,7 @@ puts_recent_hour=$(echo "$LOG1H" 2>&1 | grep '"PUT"' -c)
 tmp_no_getput_1h=false
 [[ $gets_recent_hour -eq 0 ]] && tmp_no_getput_1h=true
 [[ $puts_recent_hour -eq 0 ]] && tmp_no_getput_1h=true
-[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : 1h activity ($gets_recent_hour/$puts_recent_hour/$tmp_no_getput_1h)"
+[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : 1h activity      ($gets_recent_hour/$puts_recent_hour/$tmp_no_getput_1h)"
 
 
 # ignore i/o timeouts (satellite service pings + single satellite connects), if audit success rate is 100% and there are no other errors as well
@@ -462,7 +474,7 @@ fi
 #reset DLOG
 DLOG=""
 
-if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]] && [[ $tmp_audits_failed -eq 0 ]]; then 
+if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]] && [[ $tmp_audits_failed -eq 0 ]] && [[ $temp_severe_errors -eq 0 ]]; then 
 	DLOG="**health check**"
 	if [[ ${#NODES[@]} -gt 1 ]]; then
 		DLOG="$DLOG [$NODE]"
@@ -478,6 +490,10 @@ fi
 
 if [[ $tmp_audits_failed -ne 0 ]]; then
 	DLOG="$DLOG **AUDIT ERRORS** ($tmp_audits_failed; recoverable: $audit_recfailrate; critical: $audit_failrate)"
+fi
+
+if [[ $temp_severe_errors -ne 0 ]]; then
+	DLOG="$DLOG **SEVERE ERRORS** ($temp_severe_errors)"
 fi
 
 if [[ $tmp_fatal_errors -ne 0 ]]; then
@@ -503,7 +519,6 @@ fi
 if [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]]; then
 	DLOG="$DLOG; \n.. attention !! download $get_ratio_int / upload $put_ratio_int low"
 fi
-[[ "$VERBOSE" == "true" ]] && echo " *** alert message prepared:"
 
 
 # =============================================================================
@@ -514,7 +529,8 @@ fi
 [[ "$VERBOSE" == "true" ]] && echo "==="
 [[ "$VERBOSE" == "true" ]] && echo "$DLOG"
 
-if [[ $DEB -ne 0 ]] && $VERBOSE ; then
+
+if [[ "$VERBOSE" == "true" ]] ; then
 	# log excerpt echo
 	if [[ $tmp_rest_of_errors -ne 0 ]]; then 
 		echo "==="
@@ -531,10 +547,15 @@ if [[ $DEB -ne 0 ]] && $VERBOSE ; then
 		echo "AUDIT"
 		echo "$AUDS"
 	fi
-	if [[ $satellite_scores != "" ]]; then
+	if [ ! -z "$satellite_scores" ]; then
 		echo "==="
 		echo "SATELLITE SCORES"
 		echo "$satellite_scores"
+	fi
+	if [[ $temp_severe_errors -ne 0 ]]; then
+		echo "==="
+		echo "SEVERE ERRORS"
+		echo "$SEVERE"
 	fi
 	echo "==="
 fi
@@ -545,21 +566,23 @@ fi
 # SEND THE PUSH MESSAGE TO DISCORD
 # ------------------------------------
 
-# send discord ping
-if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_io_errors -ne $tmp_rest_of_errors ]] || [[ $tmp_audits_failed -ne 0 ]] || [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]] || [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]] || $tmp_no_getput_1h || [[ $DEB -eq 1 ]]; then 
+# send discord push
+if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_io_errors -ne $tmp_rest_of_errors ]] || [[ $tmp_audits_failed -ne 0 ]] || [[ $temp_severe_errors -ne 0 ]] || [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]] || [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]] || $tmp_no_getput_1h || [[ $DEB -eq 1 ]]; then 
     if $DISCORDON; then
         cd $DIR
         { ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "$DLOG"; } 2>/dev/null
         [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent."
-        if [[ $satellite_scores != "" ]] && $satellite_notification
-        then
-        	{ ./discord.sh --webhook-url="$DISCORDURL" --username "storj warning" --text "**warning :** satellite scores issue --> $satellite_scores"; } 2>/dev/null
-        	[[ "$VERBOSE" == "true" ]] && echo " *** discord satellite push sent."
-        fi
     fi
 fi
+# separated satellites push from errors, occured last 1h - as scores last "longer"
+# and push frequency limited by $satellite_notification anyway
+if [ ! -z "$satellite_scores" ] && $satellite_notification
+then
+    cd $DIR
+    { ./discord.sh --webhook-url="$DISCORDURL" --username "storj warning" --text "**warning :** satellite scores issue --> $satellite_scores"; } 2>/dev/null
+    [[ "$VERBOSE" == "true" ]] && echo " *** discord satellite push sent."
+fi
 
-# echo "fatal: $tmp_fatal_errors \n others: $tmp_rest_of_errors \n audits: $tmp_audits_failed \n getrepair: $get_repair_ratio_int \n putrepair: $put_repair_ratio_int \n download: $get_ratio_int \n upload: $put_ratio_int \n no_getput: $tmp_no_getput_1h \n ignore: $ignore_rest_of_errors \n debug: $DEB"
 
 
 # =============================================================================
@@ -569,13 +592,17 @@ fi
 # send email alerts
 if $MAILON; then
 
-if [[ $satellite_scores != "" ]] && $satellite_notification; then
+if [ ! -z "$satellite_scores" ] && $satellite_notification; then
     swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : SATELLITE SCORES BELOW THRESHOLD" --body "$satellite_scores" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** satellite warning mail sent."
 fi
 if [[ $tmp_fatal_errors -ne 0 ]]; then 
 	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : FATAL ERRORS FOUND" --body "$FATS" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** fatal error mail sent."
+fi
+if [[ $temp_severe_errors -ne 0 ]]; then 
+	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : SEVERE ERRORS FOUND" --body "$SEVERE" --silent "1"
+	[[ "$VERBOSE" == "true" ]] && echo " *** severe error mail sent."
 fi
 if [[ $tmp_rest_of_errors -ne 0 ]]; then
 	if $ignore_rest_of_errors; then
