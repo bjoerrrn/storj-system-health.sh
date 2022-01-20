@@ -251,7 +251,7 @@ audit_failed_crit=0
 audit_failed_crit_text=""
 audit_recfailrate=0.000%
 audit_failrate=0.000%
-audit_successrate=100.000%
+audit_successrate=100%
 
 
 ### > check if storagenode is runnning; if not, cancel analysis and push / email alert
@@ -492,7 +492,7 @@ if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]]
 	if [[ ${#NODES[@]} -gt 1 ]]; then
 		DLOG="$DLOG [$NODE]"
 	fi
-	DLOG="$DLOG : hdd $tmp_disk_usage < OK >"
+	DLOG="$DLOG : hdd $tmp_disk_usage => OK "
 else
 	DLOG="**warning**"
 	if [[ ${#NODES[@]} -gt 1 ]]; then
@@ -579,10 +579,11 @@ fi
 # SEND THE PUSH MESSAGE TO DISCORD
 # ------------------------------------
 
+cd $DIR
+
 # send discord push
 if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_io_errors -ne $tmp_rest_of_errors ]] || [[ $tmp_audits_failed -ne 0 ]] || [[ $temp_severe_errors -ne 0 ]] || [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]] || [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]] || $tmp_no_getput_1h || [[ $DEB -eq 1 ]]; then 
     if $DISCORDON; then
-        cd $DIR
         { ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "$DLOG"; } 2>/dev/null
         [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent."
     fi
@@ -591,9 +592,14 @@ fi
 # and push frequency limited by $satellite_notification anyway
 if [ ! -z "$satellite_scores" ] && $satellite_notification
 then
-    cd $DIR
     { ./discord.sh --webhook-url="$DISCORDURL" --username "storj warning" --text "**warning :** satellite scores issue --> $satellite_scores"; } 2>/dev/null
     [[ "$VERBOSE" == "true" ]] && echo " *** discord satellite push sent."
+fi
+# in case of discord debug mode is on, also send success statistics
+if [[ $DEB -eq 1 ]]
+then
+    { ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "**stats :**\n.. audits (r: $audit_recfailrate, c: $audit_failrate, s: $audit_successrate)\n.. downloads (c: $dl_canratio, f: $dl_failratio, s: $get_ratio_int%)\n.. uploads (c: $put_cancel_ratio, f: $put_fail_ratio, s: $put_ratio_int%)\n.. rep down (c: $get_repair_canratio, f: $get_repair_failratio, s: $get_repair_ratio_int%)\n.. rep up (c: $put_repair_canratio, f: $put_repair_failratio, s: $put_repair_ratio_int%)"; } 2>/dev/null
+    [[ "$VERBOSE" == "true" ]] && echo " *** discord success rates push sent."
 fi
 
 
