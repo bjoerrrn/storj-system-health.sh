@@ -62,6 +62,10 @@ NODES=storagenode       # storage node names, multiple: separated with comma,
 NODEURLS=localhost:14002
                         # storage node dashboard urls, multiple: separated with comma, 
                         # e.g. localhost:14002,192.168.171.5:14002
+
+## alerting settings
+SATPINGFREQ=3600        # in case satellite scores are below threshold, 
+                        # value in seconds, when next alert will be sent earliest
 ```
 
 make sure, your script is executable by running the following command. add 'sudo' at the beginning, if admin privileges are required. 
