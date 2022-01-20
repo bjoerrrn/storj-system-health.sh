@@ -64,7 +64,7 @@ shift $((OPTIND-1))
 # get current dir of this script
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
 
-
+[[ "$VERBOSE" == "true" ]] && echo "==="
 [[ "$VERBOSE" == "true" ]] && echo -e " *** timestamp [$(date +'%d.%m.%Y %H:%M')]"
 [[ "$VERBOSE" == "true" ]] && [[ $DEB -eq 1 ]] && echo -e " *** discord debug mode on"
 [[ "$VERBOSE" == "true" ]] && [[ $DEB -eq 2 ]] && echo -e " *** mail debug mode on"
@@ -213,14 +213,12 @@ tmp_disk_usage="$(df ${MOUNTPOINTS[$i]} | grep / | awk '{ print $5}' | sed 's/%/
 
 ## check if node is running in docker
 RUNNING="$(echo "$DOCKERPS" 2>&1 | grep "$NODE" -c)"
-[[ "$VERBOSE" == "true" ]] && echo " *** node is running : $RUNNING"
+[[ "$VERBOSE" == "true" ]] && echo " *** node is running        : $RUNNING"
 
 # grab satellite scores
 node_url=${NODEURLS[$i]}
-[[ "$VERBOSE" == "true" ]] && echo " *** satellite scores url : $node_url"
 # check availability of api/sno/satellites
 satellite_info_fulltext=$(echo -E $(curl -s "$node_url/api/sno/satellites"))
-[ -z "$satellite_info_fulltext" ] && [[ "$VERBOSE" == "true" ]] && echo "warning : satellite's info not available, please verify: $node_url/api/sno/satellites"
 satellite_scores=$(echo -E $(curl -s "$node_url/api/sno/satellites" |
 jq -r \
         --argjson auditScore 1 \
@@ -233,15 +231,20 @@ jq -r \
                         . + ["\($key) \(100*$a[$key]|floor)% @ \($name) ... "]
                 ) else . end
                 ) | .[]'))
-[ ! -z "$satellite_info_fulltext" ] && [[ "$VERBOSE" == "true" ]] && echo " *** satellite scores selected."
+[ ! -z "$satellite_info_fulltext" ] && [[ "$VERBOSE" == "true" ]] && echo " *** satellite scores url   : $node_url/api/sno/satellites (OK)"
+if [ -z "$satellite_info_fulltext" ] && [[ "$VERBOSE" == "true" ]]
+then 
+    echo " *** satellite scores url   : $node_url/api/sno/satellites -> not OK"
+    echo "warning : satellite scores not available, please verify access."
+fi
 
 # docker log selection from the last 24 hours and 1 hour
 LOG1D="$(docker logs --since 24h $NODE 2>&1)"
 [[ "$VERBOSE" == "true" ]] && tmp_count="$(docker logs --since 24h $NODE 2>&1 | grep '' -c)"
-[[ "$VERBOSE" == "true" ]] && echo " *** docker log 1d selected (#$tmp_count)."
+[[ "$VERBOSE" == "true" ]] && echo " *** docker log 1d selected : #$tmp_count"
 LOG1H="$(docker logs --since 1h $NODE 2>&1)"
 [[ "$VERBOSE" == "true" ]] && tmp_count="$(docker logs --since 1h $NODE 2>&1 | grep '' -c)"
-[[ "$VERBOSE" == "true" ]] && echo " *** docker log 1h selected (#$tmp_count)."
+[[ "$VERBOSE" == "true" ]] && echo " *** docker log 1h selected : #$tmp_count"
 
 # define audit variables, which are not used, in case there is no audit failure
 audit_success=0
@@ -281,12 +284,12 @@ tmp_rest_of_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' -c)"
 tmp_io_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' | grep -e 'timeout' -c)"
 temp_severe_errors="$(echo "$SEVERE" 2>&1 | grep -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -c)"
 
-[[ "$VERBOSE" == "true" ]] && echo " *** info count        : #$tmp_info"
-[[ "$VERBOSE" == "true" ]] && echo " *** audit error count : #$tmp_audits_failed"
-[[ "$VERBOSE" == "true" ]] && echo " *** fatal error count : #$tmp_fatal_errors"
-[[ "$VERBOSE" == "true" ]] && echo " *** severe count      : #$temp_severe_errors"
-[[ "$VERBOSE" == "true" ]] && echo " *** other error count : #$tmp_rest_of_errors"
-[[ "$VERBOSE" == "true" ]] && echo " *** i/o timouts count : #$tmp_io_errors"
+[[ "$VERBOSE" == "true" ]] && echo " *** info count             : #$tmp_info"
+[[ "$VERBOSE" == "true" ]] && echo " *** audit error count      : #$tmp_audits_failed"
+[[ "$VERBOSE" == "true" ]] && echo " *** fatal error count      : #$tmp_fatal_errors"
+[[ "$VERBOSE" == "true" ]] && echo " *** severe count           : #$temp_severe_errors"
+[[ "$VERBOSE" == "true" ]] && echo " *** other error count      : #$tmp_rest_of_errors"
+[[ "$VERBOSE" == "true" ]] && echo " *** i/o timouts count      : #$tmp_io_errors"
 
 
 ## in case of audit issues, select and share details (recoverable or critical)
@@ -325,9 +328,9 @@ if [[ $tmp_audits_failed -ne 0 ]]; then
         audit_difference=$(($audit_started-$audit_success-$audit_failed_crit-$audit_failed_warn))
     fi
 fi
-[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : audits           (warn: $audit_recfailrate, crit: $audit_failrate, s: $audit_successrate)"
+[[ "$VERBOSE" == "true" ]] && echo " *** audits                 : warn: $audit_recfailrate, crit: $audit_failrate, s: $audit_successrate"
 if [[ "$VERBOSE" == "true" ]] && [[ $audit_difference -gt 0 ]]; then
-                              echo " ***                  warning:         -> there are audits pending and not finished ($audit_difference)"
+                              echo " ***                          warning:         -> there are audits pending and not finished ($audit_difference)"
 fi
 
 ## download stats
@@ -359,7 +362,7 @@ if [ $(($dl_success+$dl_failed+$dl_canceled)) -ge 1 ]
 then
 	get_ratio_int=$(printf '%.0f\n' $(echo -e "$dl_success $dl_failed $dl_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))
 fi
-[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : downloads        (c: $dl_canratio, f: $dl_failratio, s: $get_ratio_int%)"
+[[ "$VERBOSE" == "true" ]] && echo " *** downloads              : c: $dl_canratio, f: $dl_failratio, s: $get_ratio_int%"
 
 
 ## upload stats
@@ -400,7 +403,7 @@ if [ $(($put_success+$put_canceled+$put_failed)) -ge 1 ]
 then
 	put_ratio_int=$(printf '%.0f\n' $(echo -e "$put_success $put_failed $put_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))
 fi
-[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : uploads          (c: $put_cancel_ratio, f: $put_fail_ratio, s: $put_ratio_int%)"
+[[ "$VERBOSE" == "true" ]] && echo " *** uploads                : c: $put_cancel_ratio, f: $put_fail_ratio, s: $put_ratio_int%"
 
 
 ## repair download & upload stats
@@ -432,7 +435,7 @@ if [ $(($get_repair_success+$get_repair_failed+$get_repair_canceled)) -ge 1 ]
 then
 	get_repair_ratio_int=$(printf '%.0f\n' $(echo -e "$get_repair_success $get_repair_failed $get_repair_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))
 fi
-[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : repair downloads (c: $get_repair_canratio, f: $get_repair_failratio, s: $get_repair_ratio_int%)"
+[[ "$VERBOSE" == "true" ]] && echo " *** repair downloads       : c: $get_repair_canratio, f: $get_repair_failratio, s: $get_repair_ratio_int%"
 
 #count of successful uploads of repaired pieces
 put_repair_success=$(echo "$LOG1D" 2>&1 | grep PUT_REPAIR | grep uploaded -c)
@@ -460,7 +463,7 @@ if [ $(($put_repair_success+$put_repair_failed+$put_repair_canceled)) -ge 1 ]
 then
 	put_repair_ratio_int=$(printf '%.0f\n' $(echo -e "$put_repair_success $put_repair_failed $put_repair_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))
 fi
-[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : repair uploads   (c: $put_repair_canratio, f: $put_repair_failratio, s: $put_repair_ratio_int%)"
+[[ "$VERBOSE" == "true" ]] && echo " *** repair uploads         : c: $put_repair_canratio, f: $put_repair_failratio, s: $put_repair_ratio_int%"
 
 
 ## count upload and download activity last hour
@@ -471,7 +474,7 @@ puts_recent_hour=$(echo "$LOG1H" 2>&1 | grep '"PUT"' -c)
 tmp_no_getput_1h=false
 [[ $gets_recent_hour -eq 0 ]] && tmp_no_getput_1h=true
 [[ $puts_recent_hour -eq 0 ]] && tmp_no_getput_1h=true
-[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : 1h activity      ($gets_recent_hour/$puts_recent_hour/$tmp_no_getput_1h)"
+[[ "$VERBOSE" == "true" ]] && echo " *** 1h activity            : up: $gets_recent_hour / down: $puts_recent_hour / $tmp_no_getput_1h"
 
 
 # ignore i/o timeouts (satellite service pings + single satellite connects), if audit success rate is 100% and there are no other errors as well
@@ -489,7 +492,7 @@ fi
 if [[ $tmp_audits_failed -ne 0 ]]; then
 	ignore_rest_of_errors=false
 fi
-[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : i/o timouts ignored ($ignore_rest_of_errors)"
+[[ "$VERBOSE" == "true" ]] && echo " *** i/o timouts ignored    : $ignore_rest_of_errors"
 
 
 # =============================================================================
@@ -556,7 +559,7 @@ fi
 
 # dlog echo to terminal
 [[ "$VERBOSE" == "true" ]] && echo "==="
-[[ "$VERBOSE" == "true" ]] && echo "$DLOG"
+[[ "$VERBOSE" == "true" ]] && echo " message: $DLOG"
 
 
 if [[ "$VERBOSE" == "true" ]] ; then
