@@ -292,6 +292,8 @@ temp_severe_errors="$(echo "$SEVERE" 2>&1 | grep -e 'unexpected shutdown' -e 'fa
 ## in case of audit issues, select and share details (recoverable or critical)
 # ------------------------------------
 if [[ $tmp_audits_failed -ne 0 ]]; then 
+    #count of started audits
+    audit_started=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep started -c)
 	#count of successful audits
 	audit_success=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep downloaded -c)
 	#count of recoverable failed audits
@@ -314,9 +316,19 @@ if [[ $tmp_audits_failed -ne 0 ]]; then
     else
 	    audit_successrate=0.000%
     fi
+    #check difference started - success - failed
+    audit_difference=0
+    if [[ $audit_started -gt 0 ]]
+    then 
+        # there are audits, which have been started, but are not finished
+        # more than 2 pending audits = warning alert to be sent
+        audit_difference=$(($audit_started-$audit_success-$audit_failed_crit-$audit_failed_warn))
+    fi
 fi
-[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : audits           (rec: $audit_recfailrate, crit: $audit_failrate, s: $audit_successrate)"
-
+[[ "$VERBOSE" == "true" ]] && echo " *** stats selected : audits           (warn: $audit_recfailrate, crit: $audit_failrate, s: $audit_successrate)"
+if [[ "$VERBOSE" == "true" ]] && [[ $audit_difference -gt 0 ]]; then
+                              echo " ***                  warning:         -> there are audits pending and not finished ($audit_difference)"
+fi
 
 ## download stats
 # ------------------------------------
@@ -502,7 +514,11 @@ else
 fi
 
 if [[ $tmp_audits_failed -ne 0 ]]; then
-	DLOG="$DLOG **AUDIT ERRORS** ($tmp_audits_failed; recoverable: $audit_recfailrate; critical: $audit_failrate)"
+	DLOG="$DLOG **AUDIT ERRORS** ($tmp_audits_failed -> recoverable: $audit_recfailrate; critical: $audit_failrate)"
+fi
+
+if [[ $audit_difference -gt 0 ]]; then
+	DLOG="$DLOG **AUDIT WARNING** pending audits: $audit_difference"
 fi
 
 if [[ $temp_severe_errors -ne 0 ]]; then
@@ -592,7 +608,7 @@ fi
 # and push frequency limited by $satellite_notification anyway
 if [ ! -z "$satellite_scores" ] && $satellite_notification
 then
-    { ./discord.sh --webhook-url="$DISCORDURL" --username "storj warning" --text "**warning :** satellite scores issue --> $satellite_scores"; } 2>/dev/null
+    { ./discord.sh --webhook-url="$DISCORDURL" --username "WARNING" --text "**warning :** satellite scores issue --> $satellite_scores"; } 2>/dev/null
     [[ "$VERBOSE" == "true" ]] && echo " *** discord satellite push sent."
 fi
 # in case of discord debug mode is on, also send success statistics
@@ -638,6 +654,11 @@ if [[ $tmp_audits_failed -ne 0 ]]; then
 	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : AUDIT ERRORS FOUND" --body "Recoverable: $audit_recfailrate \n\n$audit_failed_warn_text \n\nCritical: $audit_failrate \n\n$audit_failed_crit_text\n\nComplete: \n$AUDS \n\n$AUDS" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** audit error mail sent."
 fi
+if [[ $audit_difference -gt 0 ]]; then 
+	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : AUDIT WARNING - pending audits" --body "Warning: there are $audit_difference pending audits, which have not yet finished." --silent "1"
+	[[ "$VERBOSE" == "true" ]] && echo " *** pending audit warning mail sent."
+fi
+
 # send debug mail 
 if [[ $DEB -eq 2 ]]; then
 	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : DEBUG TEST MAIL" --body "blobb." --silent "1"
