@@ -26,10 +26,9 @@ settings_file=".storj-system-health"           # settings file path
 DEB=0                                          # debug mode flag
 VERBOSE=false                                  # verbose mode flag
 
-satellite_notification=false                            # send satellite notification flag
-settings_satellite_key="satping"                        # settings satellite ping key
-settings_satellite_value_now=$(date +'%d.%m.%Y %H:%M')  # settings satellite ping value of today
-settings_satellite_value_timestamp=$(date +%s)          # settings satellite ping value of now
+satellite_notification=false                   # send satellite notification flag
+settings_satellite_key="satping"               # settings satellite ping key
+settings_satellite_timestamp=$(date +%s)       # settings satellite ping value of now
 
 # help text
 
@@ -76,14 +75,14 @@ DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
 # ------------------------------------
 
 function updateSettingsSatellitePing() {
-    sed -i -e "s/$settings_satellite_key=$satping/$settings_satellite_key=$settings_satellite_value_timestamp/g" "$settings_file"
-    [[ "$VERBOSE" == "true" ]] && echo " *** settings: latest satellite ping saved [$settings_satellite_value_now]."
+    sed -i -e "s/$settings_satellite_key=$satping/$settings_satellite_key=$settings_satellite_timestamp/g" "$settings_file"
+    [[ "$VERBOSE" == "true" ]] && echo " *** settings: latest satellite ping saved [$(date +'%d.%m.%Y %H:%M')]."
 }
 
 function restoreSettings() {
     [[ "$VERBOSE" == "true" ]] && echo " *** settings: restoring file:"
-    echo "$settings_satellite_key=$settings_satellite_value_timestamp" > $settings_file
-    [[ "$VERBOSE" == "true" ]] && echo " *** settings: latest satellite ping saved [$settings_satellite_value_now]."
+    echo "$settings_satellite_key=$settings_satellite_timestamp" > $settings_file
+    [[ "$VERBOSE" == "true" ]] && echo " *** settings: latest satellite ping saved [$(date +'%d.%m.%Y %H:%M')]."
     # .. other values to be appended with >> instead of > !
 }
 
@@ -152,7 +151,7 @@ else
     fi
     # compare, if dates are equal or not
     # if unequal, perform satellite notification, else not
-    difference=$(($settings_satellite_value_timestamp-$satping))
+    difference=$(($settings_satellite_timestamp-$satping))
     if [[ $difference -gt $SATPINGFREQ ]]
     then
         satellite_notification=true  # do perform the satellite notification
