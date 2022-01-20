@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.5.7
+# v1.5.8
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
