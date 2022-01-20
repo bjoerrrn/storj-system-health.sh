@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.5.6
+# v1.5.7
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -25,10 +25,11 @@ settings_file=".storj-system-health"           # settings file path
 
 DEB=0                                          # debug mode flag
 VERBOSE=false                                  # verbose mode flag
-satellite_notification=false                   # send satellite notification flag
 
-settings_satellite_key="satping"               # settings satellite ping key
-settings_satellite_value_now=$(date +'%Y%m%d') # settings satellite ping value 
+satellite_notification=false                            # send satellite notification flag
+settings_satellite_key="satping"                        # settings satellite ping key
+settings_satellite_value_now=$(date +'%d.%m.%Y %H:%M')  # settings satellite ping value of today
+settings_satellite_value_timestamp=$(date +%s)          # settings satellite ping value of now
 
 # help text
 
@@ -75,13 +76,13 @@ DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
 # ------------------------------------
 
 function updateSettingsSatellitePing() {
-    sed -i -e "s/$settings_satellite_key=$satping/$settings_satellite_key=$settings_satellite_value_now/g" "$settings_file"
+    sed -i -e "s/$settings_satellite_key=$satping/$settings_satellite_key=$settings_satellite_value_timestamp/g" "$settings_file"
     [[ "$VERBOSE" == "true" ]] && echo " *** settings: latest satellite ping saved [$settings_satellite_value_now]."
 }
 
 function restoreSettings() {
     [[ "$VERBOSE" == "true" ]] && echo " *** settings: restoring file:"
-    echo "$settings_satellite_key=$settings_satellite_value_now" > $settings_file
+    echo "$settings_satellite_key=$settings_satellite_value_timestamp" > $settings_file
     [[ "$VERBOSE" == "true" ]] && echo " *** settings: latest satellite ping saved [$settings_satellite_value_now]."
     # .. other values to be appended with >> instead of > !
 }
@@ -121,6 +122,14 @@ else
     [[ ${#MOUNTPOINTS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and MOUNTPOINTS do not match in .credo" && exit 2
     [[ ${#NODEURLS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and NODEURLS do not match in .credo" && exit 2
 
+    if [[ -z "$SATPINGFREQ" ]]; then
+        echo "SATPINGFREQ=3600" >> $config_file
+        echo "warning: SATPINGFREQ was not specified in .credo, but was added now."
+        echo "         You need to restart the script to make it work."
+        echo "         Script has been stopped."
+        exit 2
+    fi
+
     [[ "$VERBOSE" == "true" ]] && echo " *** config file loaded"
 fi
 
@@ -143,10 +152,15 @@ else
     fi
     # compare, if dates are equal or not
     # if unequal, perform satellite notification, else not
-    if [[ $satping != $settings_satellite_value_now ]]
+    difference=$(($settings_satellite_value_timestamp-$satping))
+    if [[ $difference -gt $SATPINGFREQ ]]
     then
         satellite_notification=true  # do perform the satellite notification
         updateSettingsSatellitePing  # replace old date with current date
+    fi
+    if [[ $DEB -eq 1 ]]
+    then
+        satellite_notification=true  # do perform the satellite notification anyway when flag -d
     fi
     [[ "$VERBOSE" == "true" ]] && echo " *** settings: satellite pings will be sent: $satellite_notification"
 fi 
@@ -211,7 +225,7 @@ satellite_info_fulltext=$(echo -E $(curl -s "$node_url/api/sno/satellites"))
 satellite_scores=$(echo -E $(curl -s "$node_url/api/sno/satellites" |
 jq -r \
         --argjson auditScore 1 \
-        --argjson suspensionScore 0.99 \
+        --argjson suspensionScore 0.98 \
         --argjson onlineScore 0.95 \
         '.audits[] as $a | ($a.satelliteName | sub(":.*";"")) as $name |
         reduce ($ARGS.named|keys[]) as $key (
