@@ -62,6 +62,7 @@ MAILPASS=""             # your password from smtp server
 ## node data mount points
 MOUNTPOINTS=/mnt/node   # your storage node mount point, multiple: separated with comma
                         # e.g. /mnt/node,/mnt/node-a,/mnt/node-b
+                        # enter 'source' from the docker run command here
 
 ## storj node docker names
 NODES=storagenode       # storage node names, multiple: separated with comma, 
