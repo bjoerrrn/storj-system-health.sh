@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.5.8
+# v1.5.9
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -215,6 +215,10 @@ tmp_disk_usage="$(df ${MOUNTPOINTS[$i]} | grep / | awk '{ print $5}' | sed 's/%/
 RUNNING="$(echo "$DOCKERPS" 2>&1 | grep "$NODE" -c)"
 [[ "$VERBOSE" == "true" ]] && echo " *** node is running        : $RUNNING"
 
+
+# CHECK SATELLITE SCORES
+# ------------------------------------
+
 # grab satellite scores
 node_url=${NODEURLS[$i]}
 # check availability of api/sno/satellites
@@ -237,6 +241,36 @@ then
     echo " *** satellite scores url   : $node_url/api/sno/satellites -> not OK"
     echo "warning : satellite scores not available, please verify access."
 fi
+
+
+# CHECK STORJ VERSION
+# ------------------------------------
+
+# process, if api info is available, else skip
+storj_newer_version=false
+storj_version_current=""
+storj_version_latest=""
+storj_version_date=""
+if [ ! -z "$satellite_info_fulltext" ]
+then 
+    # grab latest version from github
+    storj_version_latest=$(curl --silent "https://api.github.com/repos/storj/storj/releases/latest" | jq -r '.tag_name' | cut -c 2-)
+    storj_version_date=$(curl --silent "https://api.github.com/repos/storj/storj/releases/latest" | jq -r '.published_at')
+    # grab current version on this node
+    storj_version_current=$(echo -E $(curl -s "$node_url/api/sno/" | jq -r '.version'))
+    [[ "$VERBOSE" == "true" ]] && echo " *** storj node api url     : $node_url/api/sno (OK)"
+    [[ "$VERBOSE" == "true" ]] && echo " *** storj version current  : installed $storj_version_current"
+    [[ "$VERBOSE" == "true" ]] && echo " *** storj version latest   : github $storj_version_latest [$storj_version_date]"
+    if [[ "$storj_version_current" != "$storj_version_latest" ]]
+    then 
+        storj_newer_version=true
+        echo "warning : there seems to be a newer version of storj available."
+    fi
+else
+    echo " *** node api url           : $node_url/api/sno -> not OK"
+    echo "warning : storj version not available, please verify access."
+fi
+
 
 # docker log selection from the last 24 hours and 1 hour
 LOG1D="$(docker logs --since 24h $NODE 2>&1)"
@@ -550,6 +584,10 @@ fi
 
 if [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]]; then
 	DLOG="$DLOG; \n.. attention !! download $get_ratio_int / upload $put_ratio_int low"
+fi
+
+if [[ "$storj_newer_version" == "true" ]] ; then
+    DLOG="$DLOG; \n.. there is a newer version of storj available: current $storj_version_current, latest $storj_version_latest [$storj_version_date]"
 fi
 
 
