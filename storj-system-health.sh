@@ -109,9 +109,13 @@ else
 
 
     [[ -z "$DISCORDON" ]] && echo "fatal: DISCORDON not specified in .credo" && exit 2
-    [[ -z "$DISCORDURL" ]] && echo "fatal: DISCORDURL not specified in .credo" && exit 2
-    [[ -z "$MAILON" ]] && echo "fatal: MAILON not specified in .credo" && exit 2
+    if [[ "$DISCORDON" == "true" ]]
+    then 
+        [[ -z "$DISCORDURL" ]] && echo "fatal: DISCORDURL not specified in .credo" && exit 2
+    fi
     
+    
+    [[ -z "$MAILON" ]] && echo "fatal: MAILON not specified in .credo" && exit 2
     if [[ "$MAILON" == "true" ]]
     then 
         [[ -z "$MAILFROM" ]] && echo "fatal: MAILFROM not specified in .credo" && exit 2
@@ -120,9 +124,11 @@ else
         [[ -z "$MAILUSER" ]] && echo "fatal: MAILUSER not specified in .credo" && exit 2
         [[ -z "$MAILPASS" ]] && echo "fatal: MAILPASS not specified in .credo" && exit 2
     fi
+    
     [[ -z "$NODES" ]] && echo "failure: NODES not specified in .credo" && exit 2
     [[ -z "$MOUNTPOINTS" ]] && echo "failure: MOUNTPOINTS not specified in .credo" && exit 2
     [[ -z "$NODEURLS" ]] && echo "failure: NODEURLS not specified in .credo" && exit 2
+
 
     if [[ -z "$SATPINGFREQ" ]]; then
         echo "SATPINGFREQ=3600" >> $config_file
