@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.5.10
+# v1.5.11a
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -107,6 +107,7 @@ else
     # loads config data into variables 
     { while IFS== read var values ; do IFS=, read -a $var <<< "$values";  done < "$config_file"; } 2>/dev/null
 
+
     [[ -z "$DISCORDON" ]] && echo "fatal: DISCORDON not specified in .credo" && exit 2
     [[ -z "$DISCORDURL" ]] && echo "fatal: DISCORDURL not specified in .credo" && exit 2
     [[ -z "$MAILON" ]] && echo "fatal: MAILON not specified in .credo" && exit 2
@@ -122,8 +123,6 @@ else
     [[ -z "$NODES" ]] && echo "failure: NODES not specified in .credo" && exit 2
     [[ -z "$MOUNTPOINTS" ]] && echo "failure: MOUNTPOINTS not specified in .credo" && exit 2
     [[ -z "$NODEURLS" ]] && echo "failure: NODEURLS not specified in .credo" && exit 2
-    [[ ${#MOUNTPOINTS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and MOUNTPOINTS do not match in .credo" && exit 2
-    [[ ${#NODEURLS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and NODEURLS do not match in .credo" && exit 2
 
     if [[ -z "$SATPINGFREQ" ]]; then
         echo "SATPINGFREQ=3600" >> $config_file
@@ -132,6 +131,28 @@ else
         echo "         Script has been stopped."
         exit 2
     fi
+    
+    if [[ -z "$NODELOGPATHS" ]]; then
+        tmp_commas=
+        for (( i=0; i<${#NODES[@]}; i++ ))
+        do
+            tmp_commas="$(echo $tmp_commas/)"
+            if [[ $i -lt ${#NODES[@]}-1 ]]; then
+                tmp_commas="$(echo $tmp_commas,)"
+            fi
+        done
+        echo "NODELOGPATHS=$tmp_commas" >> $config_file
+        echo "warning: NODELOGPATHS was not specified in .credo, but was added now."
+        echo "         --> If you've redirected your logs, you need to modify .credo."
+        echo "         You need to restart the script to make it work."
+        echo "         Script has been stopped."
+        exit 2
+    fi
+    
+    # quality checks
+    [[ ${#MOUNTPOINTS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and MOUNTPOINTS do not match in .credo" && exit 2
+    [[ ${#NODEURLS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and NODEURLS do not match in .credo" && exit 2
+    [[ ${#NODELOGPATHS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and NODELOGPATHS do not match in .credo" && exit 2
 
     [[ "$VERBOSE" == "true" ]] && echo " *** config file loaded"
 fi
@@ -278,14 +299,25 @@ else
     echo "warning : storj version not available, please verify access."
 fi
 
-
-# docker log selection from the last 24 hours and 1 hour
-LOG1D="$(docker logs --since 24h $NODE 2>&1)"
-[[ "$VERBOSE" == "true" ]] && tmp_count="$(docker logs --since 24h $NODE 2>&1 | grep '' -c)"
-[[ "$VERBOSE" == "true" ]] && echo " *** docker log 1d selected : #$tmp_count"
-LOG1H="$(docker logs --since 1h $NODE 2>&1)"
-[[ "$VERBOSE" == "true" ]] && tmp_count="$(docker logs --since 1h $NODE 2>&1 | grep '' -c)"
-[[ "$VERBOSE" == "true" ]] && echo " *** docker log 1h selected : #$tmp_count"
+LOG1D=""
+LOG1H=""
+NODELOGPATH=${NODELOGPATHS[$i]}
+if [[ "$NODELOGPATH" == "/" ]]
+then 
+    # docker log selection from the last 24 hours and 1 hour
+    LOG1D="$(docker logs --since 24h $NODE 2>&1)"
+    [[ "$VERBOSE" == "true" ]] && tmp_count="$(docker logs --since 24h $NODE 2>&1 | grep '' -c)"
+    [[ "$VERBOSE" == "true" ]] && echo " *** docker log 1d selected : #$tmp_count"
+    LOG1H="$(docker logs --since 1h $NODE 2>&1)"
+    [[ "$VERBOSE" == "true" ]] && tmp_count="$(docker logs --since 1h $NODE 2>&1 | grep '' -c)"
+    [[ "$VERBOSE" == "true" ]] && echo " *** docker log 1h selected : #$tmp_count"
+else
+    # log file selection, in case log is stored in a file
+    LOG1D="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} 2>&1)"
+    LOG1H="$LOG1D"
+    [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1D" 2>&1 | grep '' -c)"
+    [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded        : #$tmp_count"
+fi
 
 # define audit variables, which are not used, in case there is no audit failure
 audit_success=0
