@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.5.11a
+# v1.5.11
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -90,11 +90,14 @@ function restoreSettings() {
 # DEFINE VARIABLES AND CONSTANTS
 # ------------------------------------
 
-# check, if discord.sh script exists and is executable
-if [ ! -x "$DIR/discord.sh" ]
-then
-    echo "fatal: discord.sh does not exist or is not executable:$DIR/discord.sh"
-    exit 2
+if [[ "$DISCORDON" == "true" ]]
+then 
+    # check, if discord.sh script exists and is executable
+    if [ ! -x "$DIR/discord.sh" ]
+    then
+        echo "fatal: discord.sh does not exist or is not executable:$DIR/discord.sh"
+        exit 2
+    fi
 fi
 
 
@@ -692,13 +695,13 @@ if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_io_errors -ne $tmp_rest_of_errors ]]
 fi
 # separated satellites push from errors, occured last 1h - as scores last "longer"
 # and push frequency limited by $satellite_notification anyway
-if [ ! -z "$satellite_scores" ] && $satellite_notification
+if [ ! -z "$satellite_scores" ] && $satellite_notification && $DISCORDON
 then
     { ./discord.sh --webhook-url="$DISCORDURL" --username "WARNING" --text "**warning :** satellite scores issue --> $satellite_scores"; } 2>/dev/null
     [[ "$VERBOSE" == "true" ]] && echo " *** discord satellite push sent."
 fi
 # in case of discord debug mode is on, also send success statistics
-if [[ $DEB -eq 1 ]]
+if [[ $DEB -eq 1 ]] && $DISCORDON
 then
     { ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "**stats :**\n.. audits (r: $audit_recfailrate, c: $audit_failrate, s: $audit_successrate)\n.. downloads (c: $dl_canratio, f: $dl_failratio, s: $get_ratio_int%)\n.. uploads (c: $put_cancel_ratio, f: $put_fail_ratio, s: $put_ratio_int%)\n.. rep down (c: $get_repair_canratio, f: $get_repair_failratio, s: $get_repair_ratio_int%)\n.. rep up (c: $put_repair_canratio, f: $put_repair_failratio, s: $put_repair_ratio_int%)"; } 2>/dev/null
     [[ "$VERBOSE" == "true" ]] && echo " *** discord success rates push sent."
