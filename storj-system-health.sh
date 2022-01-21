@@ -191,10 +191,13 @@ readonly curl_ok=$?
 # curl exists and runs ok
 
 # check for swaks
-swaks --version >/dev/null 2>&1
-readonly swaks_ok=$?
-[[ "$swaks_ok" -eq 127 ]] && echo "fatal: swaks not installed" && exit 2
-# swaks exists and runs ok
+if [[ "$MAILON" == "true" ]]
+then 
+    swaks --version >/dev/null 2>&1
+    readonly swaks_ok=$?
+    [[ "$swaks_ok" -eq 127 ]] && echo "fatal: swaks not installed" && exit 2
+    # swaks exists and runs ok
+fi
 
 
 # =============================================================================
