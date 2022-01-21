@@ -140,6 +140,10 @@ satellite score issues
 
 ![satellite issues](/examples/discord-example-satellite-scores.jpg)
 
+success rates per node
+
+![success rates](/examples/discord-example-success-rates.jpg)
+
 
 ## contributing
 
