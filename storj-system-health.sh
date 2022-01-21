@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.5.9
+# v1.5.10
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -110,11 +110,15 @@ else
     [[ -z "$DISCORDON" ]] && echo "fatal: DISCORDON not specified in .credo" && exit 2
     [[ -z "$DISCORDURL" ]] && echo "fatal: DISCORDURL not specified in .credo" && exit 2
     [[ -z "$MAILON" ]] && echo "fatal: MAILON not specified in .credo" && exit 2
-    [[ -z "$MAILFROM" ]] && echo "fatal: MAILFROM not specified in .credo" && exit 2
-    [[ -z "$MAILTO" ]] && echo "fatal: MAILTO not specified in .credo" && exit 2
-    [[ -z "$MAILSERVER" ]] && echo "fatal: MAILSERVER not specified in .credo" && exit 2
-    [[ -z "$MAILUSER" ]] && echo "fatal: MAILUSER not specified in .credo" && exit 2
-    [[ -z "$MAILPASS" ]] && echo "fatal: MAILPASS not specified in .credo" && exit 2
+    
+    if [[ "$MAILON" == "true" ]]
+    then 
+        [[ -z "$MAILFROM" ]] && echo "fatal: MAILFROM not specified in .credo" && exit 2
+        [[ -z "$MAILTO" ]] && echo "fatal: MAILTO not specified in .credo" && exit 2
+        [[ -z "$MAILSERVER" ]] && echo "fatal: MAILSERVER not specified in .credo" && exit 2
+        [[ -z "$MAILUSER" ]] && echo "fatal: MAILUSER not specified in .credo" && exit 2
+        [[ -z "$MAILPASS" ]] && echo "fatal: MAILPASS not specified in .credo" && exit 2
+    fi
     [[ -z "$NODES" ]] && echo "failure: NODES not specified in .credo" && exit 2
     [[ -z "$MOUNTPOINTS" ]] && echo "failure: MOUNTPOINTS not specified in .credo" && exit 2
     [[ -z "$NODEURLS" ]] && echo "failure: NODEURLS not specified in .credo" && exit 2
@@ -286,8 +290,8 @@ audit_failed_warn=0
 audit_failed_warn_text=""
 audit_failed_crit=0
 audit_failed_crit_text=""
-audit_recfailrate=0.000%
-audit_failrate=0.000%
+audit_recfailrate=0.00%
+audit_failrate=0.00%
 audit_successrate=100%
 
 
@@ -341,15 +345,15 @@ if [[ $tmp_audits_failed -ne 0 ]]; then
 	audit_failed_crit_text=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep failed | grep exist)
 	if [ $(($audit_success+$audit_failed_crit+$audit_failed_warn)) -ge 1 ]
 	then
-		audit_recfailrate=$(printf '%.3f\n' $(echo -e "$audit_failed_warn $audit_success $audit_failed_crit" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+		audit_recfailrate=$(printf '%.2f\n' $(echo -e "$audit_failed_warn $audit_success $audit_failed_crit" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
 	fi
 	if [ $(($audit_success+$audit_failed_crit+$audit_failed_warn)) -ge 1 ]
 	then
-		audit_failrate=$(printf '%.3f\n' $(echo -e "$audit_failed_crit $audit_failed_warn $audit_success" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+		audit_failrate=$(printf '%.2f\n' $(echo -e "$audit_failed_crit $audit_failed_warn $audit_success" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
 	fi
 	if [ $(($audit_success+$audit_failed_crit+$audit_failed_warn)) -ge 1 ]
     then
-	    audit_successrate=$(printf '%.3f\n' $(echo -e "$audit_success $audit_failed_crit $audit_failed_warn" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+	    audit_successrate=$(printf '%.2f\n' $(echo -e "$audit_success $audit_failed_crit $audit_failed_warn" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
     else
 	    audit_successrate=0.000%
     fi
@@ -379,14 +383,14 @@ dl_failed=$(echo "$LOG1D" 2>&1 | grep '"GET"' | grep 'download failed' -c)
 #Ratio of canceled Downloads
 if [ $(($dl_success+$dl_failed+$dl_canceled)) -ge 1 ]
 then
-	dl_canratio=$(printf '%.3f\n' $(echo -e "$dl_canceled $dl_success $dl_failed" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+	dl_canratio=$(printf '%.2f\n' $(echo -e "$dl_canceled $dl_success $dl_failed" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
 else
 	dl_canratio=0.000%
 fi
 #Ratio of Failed Downloads
 if [ $(($dl_success+$dl_failed+$dl_canceled)) -ge 1 ]
 then
-	dl_failratio=$(printf '%.3f\n' $(echo -e "$dl_failed $dl_success $dl_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+	dl_failratio=$(printf '%.2f\n' $(echo -e "$dl_failed $dl_success $dl_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
 else
 	dl_failratio=0.000%
 fi
@@ -413,21 +417,21 @@ put_failed=$(echo "$LOG1D" 2>&1 | grep '"PUT"' | grep 'upload failed' -c)
 #Ratio of Rejections
 if [ $(($put_success+$put_rejected+$put_canceled+$put_failed)) -ge 1 ]
 then
-	put_accept_ratio=$(printf '%.3f\n' $(echo -e "$put_rejected $put_success $put_canceled $put_failed" | awk '{print ( ($2 + $3 + $4) / ( $1 + $2 + $3 + $4 )) * 100 }'))%
+	put_accept_ratio=$(printf '%.2f\n' $(echo -e "$put_rejected $put_success $put_canceled $put_failed" | awk '{print ( ($2 + $3 + $4) / ( $1 + $2 + $3 + $4 )) * 100 }'))%
 else
 	put_accept_ratio=0.000%
 fi
 #Ratio of Failed
 if [ $(($put_success+$put_rejected+$put_canceled+$put_failed)) -ge 1 ]
 then
-	put_fail_ratio=$(printf '%.3f\n' $(echo -e "$put_failed $put_success $put_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+	put_fail_ratio=$(printf '%.2f\n' $(echo -e "$put_failed $put_success $put_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
 else
 	put_fail_ratio=0.000%
 fi
 #Ratio of canceled
 if [ $(($put_success+$put_rejected+$put_canceled+$put_failed)) -ge 1 ]
 then
-	put_cancel_ratio=$(printf '%.3f\n' $(echo -e "$put_canceled $put_failed $put_success" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+	put_cancel_ratio=$(printf '%.2f\n' $(echo -e "$put_canceled $put_failed $put_success" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
 else
 	put_cancel_ratio=0.000%
 fi
@@ -452,14 +456,14 @@ get_repair_canceled=$(echo "$LOG1D" 2>&1 | grep GET_REPAIR | grep 'download canc
 #Ratio of Fail GET_REPAIR
 if [ $(($get_repair_success+$get_repair_failed+$get_repair_canceled)) -ge 1 ]
 then
-	get_repair_failratio=$(printf '%.3f\n' $(echo -e "$get_repair_failed $get_repair_success $get_repair_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+	get_repair_failratio=$(printf '%.2f\n' $(echo -e "$get_repair_failed $get_repair_success $get_repair_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
 else
 	get_repair_failratio=0.000%
 fi
 #Ratio of Cancel GET_REPAIR
 if [ $(($get_repair_success+$get_repair_failed+$get_repair_canceled)) -ge 1 ]
 then
-	get_repair_canratio=$(printf '%.3f\n' $(echo -e "$get_repair_canceled $get_repair_success $get_repair_failed" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+	get_repair_canratio=$(printf '%.2f\n' $(echo -e "$get_repair_canceled $get_repair_success $get_repair_failed" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
 else
 	get_repair_canratio=0.000%
 fi
@@ -480,14 +484,14 @@ put_repair_failed=$(echo "$LOG1D" 2>&1 | grep PUT_REPAIR | grep 'upload failed' 
 #Ratio of Fail PUT_REPAIR
 if [ $(($put_repair_success+$put_repair_failed+$put_repair_canceled)) -ge 1 ]
 then
-	put_repair_failratio=$(printf '%.3f\n' $(echo -e "$put_repair_failed $put_repair_success $put_repair_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+	put_repair_failratio=$(printf '%.2f\n' $(echo -e "$put_repair_failed $put_repair_success $put_repair_canceled" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
 else
 	put_repair_failratio=0.000%
 fi
 #Ratio of Cancel PUT_REPAIR
 if [ $(($put_repair_success+$put_repair_failed+$put_repair_canceled)) -ge 1 ]
 then
-	put_repair_canratio=$(printf '%.3f\n' $(echo -e "$put_repair_canceled $put_repair_success $put_repair_failed" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+	put_repair_canratio=$(printf '%.2f\n' $(echo -e "$put_repair_canceled $put_repair_success $put_repair_failed" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
 else
 	put_repair_canratio=0.000%
 fi
@@ -541,13 +545,13 @@ if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]]
 	if [[ ${#NODES[@]} -gt 1 ]]; then
 		DLOG="$DLOG [$NODE]"
 	fi
-	DLOG="$DLOG : hdd $tmp_disk_usage => OK "
+	DLOG="$DLOG **:** hdd $tmp_disk_usage => OK "
 else
 	DLOG="**warning**"
 	if [[ ${#NODES[@]} -gt 1 ]]; then
 		DLOG="$DLOG [$NODE]"
 	fi
-	DLOG="$DLOG :"
+	DLOG="$DLOG **:**"
 fi
 
 if [[ $tmp_audits_failed -ne 0 ]]; then
