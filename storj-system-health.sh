@@ -315,17 +315,19 @@ if [[ "$NODELOGPATH" == "/" ]]
 then 
     # docker log selection from the last 24 hours and 1 hour
     LOG1D="$(docker logs --since 24h $NODE 2>&1)"
-    [[ "$VERBOSE" == "true" ]] && tmp_count="$(docker logs --since 24h $NODE 2>&1 | grep '' -c)"
+    [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1D" 2>&1 | grep '' -c)"
     [[ "$VERBOSE" == "true" ]] && echo " *** docker log 1d selected : #$tmp_count"
     LOG1H="$(docker logs --since 1h $NODE 2>&1)"
-    [[ "$VERBOSE" == "true" ]] && tmp_count="$(docker logs --since 1h $NODE 2>&1 | grep '' -c)"
+    [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" $NODE 2>&1 | grep '' -c)"
     [[ "$VERBOSE" == "true" ]] && echo " *** docker log 1h selected : #$tmp_count"
 else
     # log file selection, in case log is stored in a file
-    LOG1D="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} 2>&1)"
-    LOG1H="$LOG1D"
+    LOG1D="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - 24 hours' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
     [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1D" 2>&1 | grep '' -c)"
-    [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded        : #$tmp_count"
+    [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded 1d     : #$tmp_count"
+    LOG1H="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - 1 hour' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
+    [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" 2>&1 | grep '' -c)"
+    [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded 1     : #$tmp_count"
 fi
 
 # define audit variables, which are not used, in case there is no audit failure
@@ -491,6 +493,8 @@ fi
 ## repair download & upload stats
 # ------------------------------------
 
+#count of started downloads of pieces for repair process
+get_repair_started=$(echo "$LOG1D" 2>&1 | grep GET_REPAIR | grep "download started" -c)
 #count of successful downloads of pieces for repair process
 get_repair_success=$(echo "$LOG1D" 2>&1 | grep GET_REPAIR | grep downloaded -c)
 #count of failed downloads of pieces for repair process
@@ -519,6 +523,8 @@ then
 fi
 [[ "$VERBOSE" == "true" ]] && echo " *** repair downloads       : c: $get_repair_canratio, f: $get_repair_failratio, s: $get_repair_ratio_int%"
 
+#count of started uploads of repaired pieces
+put_repair_started=$(echo "$LOG1D" 2>&1 | grep PUT_REPAIR | grep "upload started" -c)
 #count of successful uploads of repaired pieces
 put_repair_success=$(echo "$LOG1D" 2>&1 | grep PUT_REPAIR | grep uploaded -c)
 #count of canceled uploads repaired pieces
@@ -622,7 +628,7 @@ if [[ $tmp_rest_of_errors -ne 0 ]]; then
 	fi
 fi
 
-if [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]]; then
+if [ $get_repair_started -ne 0 -a \( $get_repair_ratio_int -lt 95 -o $put_repair_ratio_int -lt 95 \) ]; then
 	DLOG="$DLOG; \n.. attention !! repair down $get_repair_ratio_int / up $put_repair_ratio_int \n-> risk of getting disqualified"
 fi
 
