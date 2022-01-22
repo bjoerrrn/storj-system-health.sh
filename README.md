@@ -6,14 +6,14 @@ this linux shell script checks, if a [storj node][storagenode] ([:storage node] 
 ## features
 * multinode support 🌍
 * optionally discord (as quick notifications) and/or mail (with error details) alerts 📥 🔔
-* alerts:
-  * when audit, suspension and/or online scores are below a threshold (storj node discqualification risk) ⚠️
-  * alerts if audit timeouts are recognized (pending audits; discqualification risk) ⚠️
-  * alerts in case a threshold of repair gets/puts and downloads/uploads are reached (storj node discqualification risk) ⚠️
-  * alerts if there was no get/put at all in the last hour (storj node discqualification risk) ⚠️
-  * alerts in case any other fatal error occurs, incl. issues with docker stability ⚠️
-  * alerts in case storj node version is outdated ⚠️
-  * alerts in case the node is offline (docker container not started) ⚠️
+* alerts: ⚠️
+  * when audit, suspension and/or online scores are below a threshold (storj node discqualification risk)
+  * alerts if audit timeouts are recognized (pending audits; discqualification risk) 
+  * alerts in case a threshold of repair gets/puts and downloads/uploads are reached (storj node discqualification risk)
+  * alerts if there was no get/put at all in the last hour (storj node discqualification risk)
+  * alerts in case any other fatal error occurs, incl. issues with docker stability
+  * alerts in case storj node version is outdated
+  * alerts in case the node is offline (docker container not started)
 * reports:
   * disk usage
   * success rates audits, downloads, uploads, repair up-/downloads
