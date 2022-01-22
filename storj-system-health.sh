@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.5.11
+# v1.5.11a
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -321,13 +321,18 @@ then
     [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" $NODE 2>&1 | grep '' -c)"
     [[ "$VERBOSE" == "true" ]] && echo " *** docker log 1h selected : #$tmp_count"
 else
-    # log file selection, in case log is stored in a file
-    LOG1D="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - 24 hours' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
-    [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1D" 2>&1 | grep '' -c)"
-    [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded 1d     : #$tmp_count"
-    LOG1H="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - 1 hour' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
-    [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" 2>&1 | grep '' -c)"
-    [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded 1     : #$tmp_count"
+    if [ -r "${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]}" ]; then
+        # log file selection, in case log is stored in a file
+        LOG1D="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - 24 hours' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
+        [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1D" 2>&1 | grep '' -c)"
+        [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded 1d     : #$tmp_count"
+        LOG1H="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - 1 hour' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
+        [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" 2>&1 | grep '' -c)"
+        [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded 1     : #$tmp_count"
+    else
+        echo "warning : redirected log file does not exist or is not readable:"
+        echo "          ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]}"
+    fi
 fi
 
 # define audit variables, which are not used, in case there is no audit failure
