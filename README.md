@@ -14,7 +14,7 @@ this linux shell script checks, if a [storj node][storagenode] ([:storage node] 
   * alerts in case any other fatal error occurs, incl. issues with docker stability
   * alerts in case storj node version is outdated
   * alerts in case the node is offline (docker container not started)
-* reports:
+* reports: 📰
   * disk usage
   * success rates audits, downloads, uploads, repair up-/downloads
 * optimized for crontab and command line usage 💻
