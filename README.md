@@ -18,6 +18,7 @@ this linux shell script checks, if a [storj node][storagenode] ([:storage node] 
   * disk usage
   * success rates audits, downloads, uploads, repair up-/downloads
 * optimized for crontab and command line usage 💻
+* supports redirected logs [to a file][log_redirect]
 * only requires [curl][curl], [jq][jq] and (optionally) [swaks][swaks] to run 🔥 
 
 ## optimzed / tested for
@@ -59,21 +60,31 @@ MAILSERVER=""           # your smtp server address
 MAILUSER=""             # your user name from smtp server
 MAILPASS=""             # your password from smtp server
 
-## node data mount points
-MOUNTPOINTS=/mnt/node   # your storage node mount point, multiple: separated with comma
-                        # e.g. /mnt/node,/mnt/node-a,/mnt/node-b
-                        # enter 'source' from the docker run command here
-
-## storj node docker names
+## alerting settings
+SATPINGFREQ=3600        # in case satellite scores are below threshold, 
+                        # value in seconds, when next alert will be sent earliest
+                        
+## storj node docker names and urls
 NODES=storagenode       # storage node names, multiple: separated with comma, 
                         # e.g. storagenode,storagenode-a,storagenode-b
 NODEURLS=localhost:14002
                         # storage node dashboard urls, multiple: separated with comma, 
                         # e.g. localhost:14002,192.168.171.5:14002
 
-## alerting settings
-SATPINGFREQ=3600        # in case satellite scores are below threshold, 
-                        # value in seconds, when next alert will be sent earliest
+## node data mount points
+MOUNTPOINTS=/mnt/node   # your storage node mount point, multiple: separated with comma
+                        # e.g. /mnt/node,/mnt/node-a,/mnt/node-b
+                        # enter 'source' from the docker run command here
+
+## specify redirected logs per node
+NODELOGPATHS=/          # put your relative path + log file name here,
+                        # in case you've redirected your docker logs with
+                        # e.g. config.yaml: 'log.output: "/app/config/node.log"'
+                        #  /                       -> for non-redirected logs
+                        #  /node.log               -> for single node redirect
+                        #  /,/                     -> for 2 node with non-redirected logs
+                        #  /node1.log,/node2.log   -> for 2 nodes with redirects
+                        #  /node.log,/             -> only 1st is redirected
 ```
 
 make sure, your script is executable by running the following command. add 'sudo' at the beginning, if admin privileges are required. 
@@ -164,5 +175,6 @@ success rates per node
 [docker]: https://github.com/docker
 [swaks]: https://github.com/jetmore/swaks
 [storagenode]: https://www.storj.io/node
+[log_redirect]: https://docs.storj.io/node/resources/faq/redirect-logs
 <!-- Documentation -->
 [webhook]: https://support.discordapp.com/hc/en-us/articles/228383668-Intro-to-Webhooks
