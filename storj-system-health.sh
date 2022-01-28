@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.5.10
+# v1.6.0
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -90,11 +90,14 @@ function restoreSettings() {
 # DEFINE VARIABLES AND CONSTANTS
 # ------------------------------------
 
-# check, if discord.sh script exists and is executable
-if [ ! -x "$DIR/discord.sh" ]
-then
-    echo "fatal: discord.sh does not exist or is not executable:$DIR/discord.sh"
-    exit 2
+if [[ "$DISCORDON" == "true" ]]
+then 
+    # check, if discord.sh script exists and is executable
+    if [ ! -x "$DIR/discord.sh" ]
+    then
+        echo "fatal: discord.sh does not exist or is not executable:$DIR/discord.sh"
+        exit 2
+    fi
 fi
 
 
@@ -107,10 +110,15 @@ else
     # loads config data into variables 
     { while IFS== read var values ; do IFS=, read -a $var <<< "$values";  done < "$config_file"; } 2>/dev/null
 
+
     [[ -z "$DISCORDON" ]] && echo "fatal: DISCORDON not specified in .credo" && exit 2
-    [[ -z "$DISCORDURL" ]] && echo "fatal: DISCORDURL not specified in .credo" && exit 2
-    [[ -z "$MAILON" ]] && echo "fatal: MAILON not specified in .credo" && exit 2
+    if [[ "$DISCORDON" == "true" ]]
+    then 
+        [[ -z "$DISCORDURL" ]] && echo "fatal: DISCORDURL not specified in .credo" && exit 2
+    fi
     
+    
+    [[ -z "$MAILON" ]] && echo "fatal: MAILON not specified in .credo" && exit 2
     if [[ "$MAILON" == "true" ]]
     then 
         [[ -z "$MAILFROM" ]] && echo "fatal: MAILFROM not specified in .credo" && exit 2
@@ -119,11 +127,11 @@ else
         [[ -z "$MAILUSER" ]] && echo "fatal: MAILUSER not specified in .credo" && exit 2
         [[ -z "$MAILPASS" ]] && echo "fatal: MAILPASS not specified in .credo" && exit 2
     fi
+    
     [[ -z "$NODES" ]] && echo "failure: NODES not specified in .credo" && exit 2
     [[ -z "$MOUNTPOINTS" ]] && echo "failure: MOUNTPOINTS not specified in .credo" && exit 2
     [[ -z "$NODEURLS" ]] && echo "failure: NODEURLS not specified in .credo" && exit 2
-    [[ ${#MOUNTPOINTS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and MOUNTPOINTS do not match in .credo" && exit 2
-    [[ ${#NODEURLS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and NODEURLS do not match in .credo" && exit 2
+
 
     if [[ -z "$SATPINGFREQ" ]]; then
         echo "SATPINGFREQ=3600" >> $config_file
@@ -132,6 +140,28 @@ else
         echo "         Script has been stopped."
         exit 2
     fi
+    
+    if [[ -z "$NODELOGPATHS" ]]; then
+        tmp_commas=
+        for (( i=0; i<${#NODES[@]}; i++ ))
+        do
+            tmp_commas="$(echo $tmp_commas/)"
+            if [[ $i -lt ${#NODES[@]}-1 ]]; then
+                tmp_commas="$(echo $tmp_commas,)"
+            fi
+        done
+        echo "NODELOGPATHS=$tmp_commas" >> $config_file
+        echo "warning: NODELOGPATHS was not specified in .credo, but was added now."
+        echo "         --> If you've redirected your logs, you need to modify .credo."
+        echo "         You need to restart the script to make it work."
+        echo "         Script has been stopped."
+        exit 2
+    fi
+    
+    # quality checks
+    [[ ${#MOUNTPOINTS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and MOUNTPOINTS do not match in .credo" && exit 2
+    [[ ${#NODEURLS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and NODEURLS do not match in .credo" && exit 2
+    [[ ${#NODELOGPATHS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and NODELOGPATHS do not match in .credo" && exit 2
 
     [[ "$VERBOSE" == "true" ]] && echo " *** config file loaded"
 fi
@@ -278,14 +308,32 @@ else
     echo "warning : storj version not available, please verify access."
 fi
 
-
-# docker log selection from the last 24 hours and 1 hour
-LOG1D="$(docker logs --since 24h $NODE 2>&1)"
-[[ "$VERBOSE" == "true" ]] && tmp_count="$(docker logs --since 24h $NODE 2>&1 | grep '' -c)"
-[[ "$VERBOSE" == "true" ]] && echo " *** docker log 1d selected : #$tmp_count"
-LOG1H="$(docker logs --since 1h $NODE 2>&1)"
-[[ "$VERBOSE" == "true" ]] && tmp_count="$(docker logs --since 1h $NODE 2>&1 | grep '' -c)"
-[[ "$VERBOSE" == "true" ]] && echo " *** docker log 1h selected : #$tmp_count"
+LOG1D=""
+LOG1H=""
+NODELOGPATH=${NODELOGPATHS[$i]}
+if [[ "$NODELOGPATH" == "/" ]]
+then 
+    # docker log selection from the last 24 hours and 1 hour
+    LOG1D="$(docker logs --since 24h $NODE 2>&1)"
+    [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1D" 2>&1 | grep '' -c)"
+    [[ "$VERBOSE" == "true" ]] && echo " *** docker log 1d selected : #$tmp_count"
+    LOG1H="$(docker logs --since 1h $NODE 2>&1)"
+    [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" $NODE 2>&1 | grep '' -c)"
+    [[ "$VERBOSE" == "true" ]] && echo " *** docker log 1h selected : #$tmp_count"
+else
+    if [ -r "${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]}" ]; then
+        # log file selection, in case log is stored in a file
+        LOG1D="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - 24 hours' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
+        [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1D" 2>&1 | grep '' -c)"
+        [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded 1d     : #$tmp_count"
+        LOG1H="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - 1 hour' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
+        [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" 2>&1 | grep '' -c)"
+        [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded 1     : #$tmp_count"
+    else
+        echo "warning : redirected log file does not exist or is not readable:"
+        echo "          ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]}"
+    fi
+fi
 
 # define audit variables, which are not used, in case there is no audit failure
 audit_success=0
@@ -450,6 +498,8 @@ fi
 ## repair download & upload stats
 # ------------------------------------
 
+#count of started downloads of pieces for repair process
+get_repair_started=$(echo "$LOG1D" 2>&1 | grep GET_REPAIR | grep "download started" -c)
 #count of successful downloads of pieces for repair process
 get_repair_success=$(echo "$LOG1D" 2>&1 | grep GET_REPAIR | grep downloaded -c)
 #count of failed downloads of pieces for repair process
@@ -478,6 +528,8 @@ then
 fi
 [[ "$VERBOSE" == "true" ]] && echo " *** repair downloads       : c: $get_repair_canratio, f: $get_repair_failratio, s: $get_repair_ratio_int%"
 
+#count of started uploads of repaired pieces
+put_repair_started=$(echo "$LOG1D" 2>&1 | grep PUT_REPAIR | grep "upload started" -c)
 #count of successful uploads of repaired pieces
 put_repair_success=$(echo "$LOG1D" 2>&1 | grep PUT_REPAIR | grep uploaded -c)
 #count of canceled uploads repaired pieces
@@ -581,7 +633,7 @@ if [[ $tmp_rest_of_errors -ne 0 ]]; then
 	fi
 fi
 
-if [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]]; then
+if [ $get_repair_started -ne 0 -a \( $get_repair_ratio_int -lt 95 -o $put_repair_ratio_int -lt 95 \) ]; then
 	DLOG="$DLOG; \n.. attention !! repair down $get_repair_ratio_int / up $put_repair_ratio_int \n-> risk of getting disqualified"
 fi
 
@@ -654,13 +706,13 @@ if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_io_errors -ne $tmp_rest_of_errors ]]
 fi
 # separated satellites push from errors, occured last 1h - as scores last "longer"
 # and push frequency limited by $satellite_notification anyway
-if [ ! -z "$satellite_scores" ] && $satellite_notification
+if [ ! -z "$satellite_scores" ] && $satellite_notification && $DISCORDON
 then
     { ./discord.sh --webhook-url="$DISCORDURL" --username "WARNING" --text "**warning :** satellite scores issue --> $satellite_scores"; } 2>/dev/null
     [[ "$VERBOSE" == "true" ]] && echo " *** discord satellite push sent."
 fi
 # in case of discord debug mode is on, also send success statistics
-if [[ $DEB -eq 1 ]]
+if [[ $DEB -eq 1 ]] && $DISCORDON
 then
     { ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "**stats :**\n.. audits (r: $audit_recfailrate, c: $audit_failrate, s: $audit_successrate)\n.. downloads (c: $dl_canratio, f: $dl_failratio, s: $get_ratio_int%)\n.. uploads (c: $put_cancel_ratio, f: $put_fail_ratio, s: $put_ratio_int%)\n.. rep down (c: $get_repair_canratio, f: $get_repair_failratio, s: $get_repair_ratio_int%)\n.. rep up (c: $put_repair_canratio, f: $put_repair_failratio, s: $put_repair_ratio_int%)"; } 2>/dev/null
     [[ "$VERBOSE" == "true" ]] && echo " *** discord success rates push sent."
