@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.6.0
+# v1.6.1
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -363,7 +363,7 @@ ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestor
 
 # added "severe" errors in order to recognize e.g. docker issues, connectivity issues etc.
 # those are not recognized normally in the above shown triggers, so adding it here:
-SEVERE="$(echo "$LOG1H" 2>&1 | grep -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' | grep -v -e 'emptying trash failed')"
+SEVERE="$(echo "$LOG1H" 2>&1 | grep -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -e 'Unable to read the disk' -e 'software caused connection abort' | grep -v -e 'emptying trash failed')"
 
 # count errors 
 [[ "$VERBOSE" == "true" ]] && tmp_info="$(echo "$INFO" 2>&1 | grep 'INFO' -c)"
@@ -699,7 +699,7 @@ cd $DIR
 
 # send discord push
 if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_io_errors -ne $tmp_rest_of_errors ]] || [[ $tmp_audits_failed -ne 0 ]] || [[ $temp_severe_errors -ne 0 ]] || [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]] || [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]] || $tmp_no_getput_1h || [[ $DEB -eq 1 ]]; then 
-    if $DISCORDON; then
+    if $DISCORDON && [[ $get_repair_started -ne 0 ]]; then
         { ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "$DLOG"; } 2>/dev/null
         [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent."
     fi
@@ -708,13 +708,13 @@ fi
 # and push frequency limited by $satellite_notification anyway
 if [ ! -z "$satellite_scores" ] && $satellite_notification && $DISCORDON
 then
-    { ./discord.sh --webhook-url="$DISCORDURL" --username "WARNING" --text "**warning :** satellite scores issue --> $satellite_scores"; } 2>/dev/null
+    { ./discord.sh --webhook-url="$DISCORDURL" --username "WARNING" --text "**warning** [$NODE]**:** satellite scores issue --> $satellite_scores"; } 2>/dev/null
     [[ "$VERBOSE" == "true" ]] && echo " *** discord satellite push sent."
 fi
 # in case of discord debug mode is on, also send success statistics
 if [[ $DEB -eq 1 ]] && $DISCORDON
 then
-    { ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "**stats :**\n.. audits (r: $audit_recfailrate, c: $audit_failrate, s: $audit_successrate)\n.. downloads (c: $dl_canratio, f: $dl_failratio, s: $get_ratio_int%)\n.. uploads (c: $put_cancel_ratio, f: $put_fail_ratio, s: $put_ratio_int%)\n.. rep down (c: $get_repair_canratio, f: $get_repair_failratio, s: $get_repair_ratio_int%)\n.. rep up (c: $put_repair_canratio, f: $put_repair_failratio, s: $put_repair_ratio_int%)"; } 2>/dev/null
+    { ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "**stats** [$NODE]**:**\n.. audits (r: $audit_recfailrate, c: $audit_failrate, s: $audit_successrate)\n.. downloads (c: $dl_canratio, f: $dl_failratio, s: $get_ratio_int%)\n.. uploads (c: $put_cancel_ratio, f: $put_fail_ratio, s: $put_ratio_int%)\n.. rep down (c: $get_repair_canratio, f: $get_repair_failratio, s: $get_repair_ratio_int%)\n.. rep up (c: $put_repair_canratio, f: $put_repair_failratio, s: $put_repair_ratio_int%)"; } 2>/dev/null
     [[ "$VERBOSE" == "true" ]] && echo " *** discord success rates push sent."
 fi
 
