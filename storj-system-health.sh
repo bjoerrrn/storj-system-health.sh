@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.6.1
+# v1.6.2
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -242,15 +242,21 @@ readonly DOCKERPS="$(docker ps)"
 for (( i=0; i<${#NODES[@]}; i++ )); do
 NODE=${NODES[$i]}
 
-# grab (real) disk usage
-tmp_disk_usage="$(df ${MOUNTPOINTS[$i]} | grep / | awk '{ print $5}' | sed 's/%//g')%"
-
 [[ "$VERBOSE" == "true" ]] && echo "==="
 [[ "$VERBOSE" == "true" ]] && echo "running the script for node \"$NODE\" (${MOUNTPOINTS[$i]}) .."
 
 ## check if node is running in docker
 RUNNING="$(echo "$DOCKERPS" 2>&1 | grep "$NODE" -c)"
 [[ "$VERBOSE" == "true" ]] && echo " *** node is running        : $RUNNING"
+
+
+### > check if storagenode is runnning; if not, cancel analysis and push / email alert
+if [[ $RUNNING -eq 1 ]]; then
+# (if statement is closed at the end of this script)
+
+# grab (real) disk usage
+tmp_disk_usage="$(df ${MOUNTPOINTS[$i]} | grep / | awk '{ print $5}' | sed 's/%//g')%"
+
 
 
 # CHECK SATELLITE SCORES
@@ -346,18 +352,13 @@ audit_failrate=0.00%
 audit_successrate=100%
 
 
-### > check if storagenode is runnning; if not, cancel analysis and push / email alert
-if [[ $RUNNING -eq 1 ]]; then
-# (if statement is closed at the end of this script)
-
-
 # =============================================================================
 # SELECT USAGE, ERROR COUNTERS AND ERROR MESSAGES
 # ------------------------------------
 
 # select error messages in detail (partially extracted text log)
 [[ "$VERBOSE" == "true" ]] && INFO="$(echo "$LOG1H" 2>&1 | grep 'INFO')"
-AUDS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed')"
+AUDS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT' | grep 'failed')"
 FATS="$(echo "$LOG1H" 2>&1 | grep 'FATAL' | grep -v 'INFO')"
 ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed')"
 
@@ -368,7 +369,7 @@ SEVERE="$(echo "$LOG1H" 2>&1 | grep -e 'unexpected shutdown' -e 'fatal error' -e
 # count errors 
 [[ "$VERBOSE" == "true" ]] && tmp_info="$(echo "$INFO" 2>&1 | grep 'INFO' -c)"
 tmp_fatal_errors="$(echo "$FATS" 2>&1 | grep 'FATAL' -c)"
-tmp_audits_failed="$(echo "$AUDS" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed' -c)"
+tmp_audits_failed="$(echo "$AUDS" 2>&1 | grep -E 'GET_AUDIT' | grep 'failed' -c)"
 tmp_rest_of_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' -c)"
 tmp_io_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' | grep -e 'timeout' -c)"
 temp_severe_errors="$(echo "$SEVERE" 2>&1 | grep -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -c)"
@@ -698,8 +699,8 @@ fi
 cd $DIR
 
 # send discord push
-if [[ $tmp_fatal_errors -ne 0 ]] || [[ $tmp_io_errors -ne $tmp_rest_of_errors ]] || [[ $tmp_audits_failed -ne 0 ]] || [[ $temp_severe_errors -ne 0 ]] || [[ $get_repair_ratio_int -lt 95 ]] || [[ $put_repair_ratio_int -lt 95 ]] || [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]] || $tmp_no_getput_1h || [[ $DEB -eq 1 ]]; then 
-    if $DISCORDON && [[ $get_repair_started -ne 0 ]]; then
+if [ $tmp_fatal_errors -ne 0 -o $tmp_io_errors -ne $tmp_rest_of_errors -o $tmp_audits_failed -ne 0 -o $temp_severe_errors -ne 0 -o $get_repair_ratio_int -lt 95 -o \( $get_repair_started -ne 0 -a $put_repair_ratio_int -lt 95 \) -o $get_ratio_int -lt 90 -o $put_ratio_int -lt 90 -o $tmp_no_getput_1h -o $DEB -eq 1 ]; then 
+    if $DISCORDON; then
         { ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "$DLOG"; } 2>/dev/null
         [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent."
     fi
@@ -772,6 +773,7 @@ fi
 ###   email alert comes automatically through uptimerobot-ping alert. 
 ###   if relevant for you, enable the mail alert below.
 else
+	[[ "$VERBOSE" == "true" ]] && echo "warning: $NODE not running."
 	if $DISCORDON; then
 	    cd $DIR
 	    { ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "**warning :** $NODE not running!"; } 2>/dev/null
