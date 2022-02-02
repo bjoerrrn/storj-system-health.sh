@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.6.2
+# v1.6.3
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -360,11 +360,10 @@ audit_successrate=100%
 [[ "$VERBOSE" == "true" ]] && INFO="$(echo "$LOG1H" 2>&1 | grep 'INFO')"
 AUDS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT' | grep 'failed')"
 FATS="$(echo "$LOG1H" 2>&1 | grep 'FATAL' | grep -v 'INFO')"
-ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed')"
+ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'INFO' -e 'FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed')"
 
 # added "severe" errors in order to recognize e.g. docker issues, connectivity issues etc.
-# those are not recognized normally in the above shown triggers, so adding it here:
-SEVERE="$(echo "$LOG1H" 2>&1 | grep -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -e 'Unable to read the disk' -e 'software caused connection abort' | grep -v -e 'emptying trash failed')"
+SEVERE="$(echo "$LOG1H" 2>&1 | grep -i -e 'error:' -e 'fatal:' -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -e 'Unable to read the disk' -e 'software caused connection abort' | grep -v -e 'emptying trash failed' -e 'INFO' -e 'FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed')"
 
 # count errors 
 [[ "$VERBOSE" == "true" ]] && tmp_info="$(echo "$INFO" 2>&1 | grep 'INFO' -c)"
@@ -372,7 +371,7 @@ tmp_fatal_errors="$(echo "$FATS" 2>&1 | grep 'FATAL' -c)"
 tmp_audits_failed="$(echo "$AUDS" 2>&1 | grep -E 'GET_AUDIT' | grep 'failed' -c)"
 tmp_rest_of_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' -c)"
 tmp_io_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' | grep -e 'timeout' -c)"
-temp_severe_errors="$(echo "$SEVERE" 2>&1 | grep -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -c)"
+temp_severe_errors="$(echo "$SEVERE" 2>&1 | grep -i -e 'error:' -e 'fatal:' -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -e 'Unable to read the disk' -e 'software caused connection abort' -c)"
 
 [[ "$VERBOSE" == "true" ]] && echo " *** info count             : #$tmp_info"
 [[ "$VERBOSE" == "true" ]] && echo " *** audit error count      : #$tmp_audits_failed"
