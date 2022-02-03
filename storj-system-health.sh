@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.6.3
+# v1.6.4
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -323,18 +323,18 @@ then
     LOG1D="$(docker logs --since 24h $NODE 2>&1)"
     [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1D" 2>&1 | grep '' -c)"
     [[ "$VERBOSE" == "true" ]] && echo " *** docker log 1d selected : #$tmp_count"
-    LOG1H="$(docker logs --since 1h $NODE 2>&1)"
+    LOG1H="$(docker logs --since 20m $NODE 2>&1)"
     [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" $NODE 2>&1 | grep '' -c)"
-    [[ "$VERBOSE" == "true" ]] && echo " *** docker log 1h selected : #$tmp_count"
+    [[ "$VERBOSE" == "true" ]] && echo " *** docker log 20m selected : #$tmp_count"
 else
     if [ -r "${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]}" ]; then
         # log file selection, in case log is stored in a file
         LOG1D="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - 24 hours' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
         [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1D" 2>&1 | grep '' -c)"
         [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded 1d     : #$tmp_count"
-        LOG1H="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - 1 hour' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
+        LOG1H="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - 20 minutes' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
         [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" 2>&1 | grep '' -c)"
-        [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded 1     : #$tmp_count"
+        [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded 1m     : #$tmp_count"
     else
         echo "warning : redirected log file does not exist or is not readable:"
         echo "          ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]}"
@@ -383,40 +383,40 @@ temp_severe_errors="$(echo "$SEVERE" 2>&1 | grep -i -e 'error:' -e 'fatal:' -e '
 
 ## in case of audit issues, select and share details (recoverable or critical)
 # ------------------------------------
-if [[ $tmp_audits_failed -ne 0 ]]; then 
-    #count of started audits
-    audit_started=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep started -c)
-	#count of successful audits
-	audit_success=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep downloaded -c)
-	#count of recoverable failed audits
-	audit_failed_warn=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep failed | grep -v exist -c)
-	audit_failed_warn_text=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep failed | grep -v exist)
-	#count of unrecoverable failed audits
-	audit_failed_crit=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep failed | grep exist -c)
-	audit_failed_crit_text=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep failed | grep exist)
-	if [ $(($audit_success+$audit_failed_crit+$audit_failed_warn)) -ge 1 ]
-	then
-		audit_recfailrate=$(printf '%.2f\n' $(echo -e "$audit_failed_warn $audit_success $audit_failed_crit" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
-	fi
-	if [ $(($audit_success+$audit_failed_crit+$audit_failed_warn)) -ge 1 ]
-	then
-		audit_failrate=$(printf '%.2f\n' $(echo -e "$audit_failed_crit $audit_failed_warn $audit_success" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
-	fi
-	if [ $(($audit_success+$audit_failed_crit+$audit_failed_warn)) -ge 1 ]
-    then
-	    audit_successrate=$(printf '%.2f\n' $(echo -e "$audit_success $audit_failed_crit $audit_failed_warn" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
-    else
-	    audit_successrate=0.000%
-    fi
-    #check difference started - success - failed
-    audit_difference=0
-    if [[ $audit_started -gt 0 ]]
-    then 
-        # there are audits, which have been started, but are not finished
-        # more than 2 pending audits = warning alert to be sent
-        audit_difference=$(($audit_started-$audit_success-$audit_failed_crit-$audit_failed_warn))
-    fi
+
+#count of started audits
+audit_started=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep started -c)
+#count of successful audits
+audit_success=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep downloaded -c)
+#count of recoverable failed audits
+audit_failed_warn=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep failed | grep -v exist -c)
+audit_failed_warn_text=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep failed | grep -v exist)
+#count of unrecoverable failed audits
+audit_failed_crit=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep failed | grep exist -c)
+audit_failed_crit_text=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep failed | grep exist)
+if [ $(($audit_success+$audit_failed_crit+$audit_failed_warn)) -ge 1 ]
+then
+	audit_recfailrate=$(printf '%.2f\n' $(echo -e "$audit_failed_warn $audit_success $audit_failed_crit" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
 fi
+if [ $(($audit_success+$audit_failed_crit+$audit_failed_warn)) -ge 1 ]
+then
+	audit_failrate=$(printf '%.2f\n' $(echo -e "$audit_failed_crit $audit_failed_warn $audit_success" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+fi
+if [ $(($audit_success+$audit_failed_crit+$audit_failed_warn)) -ge 1 ]
+then
+    audit_successrate=$(printf '%.2f\n' $(echo -e "$audit_success $audit_failed_crit $audit_failed_warn" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+else
+    audit_successrate=0.000%
+fi
+#check difference started - success - failed
+audit_difference=0
+if [[ $audit_started -gt 0 ]]
+then 
+    # there are audits, which have been started, but are not finished
+    # more than 2 pending audits = warning alert to be sent
+    audit_difference=$(($audit_started-$audit_success-$audit_failed_crit-$audit_failed_warn))
+fi
+
 [[ "$VERBOSE" == "true" ]] && echo " *** audits                 : warn: $audit_recfailrate, crit: $audit_failrate, s: $audit_successrate"
 if [[ "$VERBOSE" == "true" ]] && [[ $audit_difference -gt 0 ]]; then
                               echo " ***                          warning:         -> there are audits pending and not finished ($audit_difference)"
