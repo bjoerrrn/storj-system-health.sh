@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.6.4
+# v1.6.5
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -133,8 +133,25 @@ else
     [[ -z "$NODEURLS" ]] && echo "failure: NODEURLS not specified in .credo" && exit 2
 
 
+    if [[ -z "$LOGMIN" ]]; then
+        echo "LOGMIN=60" >> $config_file
+        echo "warning: LOGMIN was not specified in .credo, but was added now."
+        echo "         You need to restart the script to make it work."
+        echo "         Script has been stopped."
+        exit 2
+    fi
+
+    if [[ -z "$LOGMAX" ]]; then
+        echo "LOGMAX=1440" >> $config_file
+        echo "warning: LOGMAX was not specified in .credo, but was added now."
+        echo "         You need to restart the script to make it work."
+        echo "         Script has been stopped."
+        exit 2
+    fi
+
+
     if [[ -z "$SATPINGFREQ" ]]; then
-        echo "SATPINGFREQ=3600" >> $config_file
+        echo "SATPINGFREQ=10800" >> $config_file
         echo "warning: SATPINGFREQ was not specified in .credo, but was added now."
         echo "         You need to restart the script to make it work."
         echo "         Script has been stopped."
@@ -268,8 +285,8 @@ node_url=${NODEURLS[$i]}
 satellite_info_fulltext=$(echo -E $(curl -s "$node_url/api/sno/satellites"))
 satellite_scores=$(echo -E $(curl -s "$node_url/api/sno/satellites" |
 jq -r \
-        --argjson auditScore 1 \
-        --argjson suspensionScore 0.98 \
+        --argjson auditScore 0.98 \
+        --argjson suspensionScore 0.96 \
         --argjson onlineScore 0.95 \
         '.audits[] as $a | ($a.satelliteName | sub(":.*";"")) as $name |
         reduce ($ARGS.named|keys[]) as $key (
@@ -320,21 +337,26 @@ NODELOGPATH=${NODELOGPATHS[$i]}
 if [[ "$NODELOGPATH" == "/" ]]
 then 
     # docker log selection from the last 24 hours and 1 hour
-    LOG1D="$(docker logs --since 24h $NODE 2>&1)"
+    tmp_logmax="$LOGMAX"
+    tmp_logmax+="m"
+    LOG1D="$(docker logs $NODE --since $tmp_logmax 2>&1)"
     [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1D" 2>&1 | grep '' -c)"
-    [[ "$VERBOSE" == "true" ]] && echo " *** docker log 1d selected : #$tmp_count"
-    LOG1H="$(docker logs --since 20m $NODE 2>&1)"
+    [[ "$VERBOSE" == "true" ]] && echo " *** docker log $tmp_logmax selected : #$tmp_count"
+    
+    tmp_logmin="$LOGMIN"
+    tmp_logmin+="m"
+    LOG1H="$(docker logs $NODE --since $tmp_logmin 2>&1)"
     [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" $NODE 2>&1 | grep '' -c)"
-    [[ "$VERBOSE" == "true" ]] && echo " *** docker log 20m selected: #$tmp_count"
+    [[ "$VERBOSE" == "true" ]] && echo " *** docker log $tmp_logmin selected : #$tmp_count"
 else
     if [ -r "${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]}" ]; then
         # log file selection, in case log is stored in a file
-        LOG1D="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - 24 hours' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
+        LOG1D="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - $LOGMAX minutes' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
         [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1D" 2>&1 | grep '' -c)"
-        [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded 1d     : #$tmp_count"
-        LOG1H="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - 20 minutes' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
+        [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded $LOGMAX minutes : #$tmp_count"
+        LOG1H="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - $LOGMIN minutes' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
         [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" 2>&1 | grep '' -c)"
-        [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded 20m    : #$tmp_count"
+        [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded $LOGMIN minutes : #$tmp_count"
     else
         echo "warning : redirected log file does not exist or is not readable:"
         echo "          ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]}"
@@ -358,7 +380,7 @@ audit_successrate=100%
 
 # select error messages in detail (partially extracted text log)
 [[ "$VERBOSE" == "true" ]] && INFO="$(echo "$LOG1H" 2>&1 | grep 'INFO')"
-AUDS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT' | grep 'failed')"
+AUDS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed')"
 FATS="$(echo "$LOG1H" 2>&1 | grep 'FATAL' | grep -v 'INFO')"
 ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'INFO' -e 'FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed')"
 
@@ -368,7 +390,7 @@ SEVERE="$(echo "$LOG1H" 2>&1 | grep -i -e 'error:' -e 'fatal:' -e 'unexpected sh
 # count errors 
 [[ "$VERBOSE" == "true" ]] && tmp_info="$(echo "$INFO" 2>&1 | grep 'INFO' -c)"
 tmp_fatal_errors="$(echo "$FATS" 2>&1 | grep 'FATAL' -c)"
-tmp_audits_failed="$(echo "$AUDS" 2>&1 | grep -E 'GET_AUDIT' | grep 'failed' -c)"
+tmp_audits_failed="$(echo "$AUDS" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep 'failed' -c)"
 tmp_rest_of_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' -c)"
 tmp_io_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' | grep -e 'timeout' -c)"
 temp_severe_errors="$(echo "$SEVERE" 2>&1 | grep -i -e 'error:' -e 'fatal:' -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -e 'Unable to read the disk' -e 'software caused connection abort' -c)"
@@ -385,15 +407,15 @@ temp_severe_errors="$(echo "$SEVERE" 2>&1 | grep -i -e 'error:' -e 'fatal:' -e '
 # ------------------------------------
 
 #count of started audits
-audit_started=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep started -c)
+audit_started=$(echo "$LOG1D" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep started -c)
 #count of successful audits
-audit_success=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep downloaded -c)
+audit_success=$(echo "$LOG1D" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep downloaded -c)
 #count of recoverable failed audits
-audit_failed_warn=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep failed | grep -v exist -c)
-audit_failed_warn_text=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep failed | grep -v exist)
+audit_failed_warn=$(echo "$LOG1D" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep failed | grep -v exist -c)
+audit_failed_warn_text=$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep failed | grep -v exist)
 #count of unrecoverable failed audits
-audit_failed_crit=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep failed | grep exist -c)
-audit_failed_crit_text=$(echo "$LOG1D" 2>&1 | grep GET_AUDIT | grep failed | grep exist)
+audit_failed_crit=$(echo "$LOG1D" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep failed | grep exist -c)
+audit_failed_crit_text=$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT|GET_REPAIR' | grep failed | grep exist)
 if [ $(($audit_success+$audit_failed_crit+$audit_failed_warn)) -ge 1 ]
 then
 	audit_recfailrate=$(printf '%.2f\n' $(echo -e "$audit_failed_warn $audit_success $audit_failed_crit" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
@@ -567,7 +589,7 @@ puts_recent_hour=$(echo "$LOG1H" 2>&1 | grep '"PUT"' -c)
 tmp_no_getput_1h=false
 [[ $gets_recent_hour -eq 0 ]] && tmp_no_getput_1h=true
 [[ $puts_recent_hour -eq 0 ]] && tmp_no_getput_1h=true
-[[ "$VERBOSE" == "true" ]] && echo " *** 1h activity            : up: $gets_recent_hour / down: $puts_recent_hour / $tmp_no_getput_1h"
+[[ "$VERBOSE" == "true" ]] && echo " *** $LOGMIN minutes activity : up: $gets_recent_hour / down: $puts_recent_hour / $tmp_no_getput_1h"
 
 
 # ignore i/o timeouts (satellite service pings + single satellite connects), if audit success rate is 100% and there are no other errors as well
@@ -596,16 +618,9 @@ fi
 DLOG=""
 
 if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]] && [[ $tmp_audits_failed -eq 0 ]] && [[ $temp_severe_errors -eq 0 ]]; then 
-	if [[ ${#NODES[@]} -gt 1 ]]; then
-		DLOG="$DLOG [$NODE]"
-	fi
-	DLOG="$DLOG **:** hdd $tmp_disk_usage => OK "
+	DLOG="$DLOG [$NODE] : hdd $tmp_disk_usage => OK "
 else
-	DLOG="**warning**"
-	if [[ ${#NODES[@]} -gt 1 ]]; then
-		DLOG="$DLOG [$NODE]"
-	fi
-	DLOG="$DLOG **:**"
+	DLOG="**warning** [$NODE] : "
 fi
 
 if [[ $tmp_audits_failed -ne 0 ]]; then
@@ -637,7 +652,7 @@ if [ $get_repair_started -ne 0 -a \( $get_repair_ratio_int -lt 95 -o $put_repair
 fi
 
 if [[ $gets_recent_hour -eq 0 ]] && [[ $puts_recent_hour -eq 0 ]]; then
-	DLOG="$DLOG; \n.. warning !! no get/put in last 1h"
+	DLOG="$DLOG; \n.. warning !! no get/put in last $LOGMINm"
 fi
 
 if [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]]; then
@@ -696,14 +711,13 @@ fi
 
 cd $DIR
 
+if $DISCORDON; then
 # send discord push
 if [ $tmp_fatal_errors -ne 0 -o $tmp_io_errors -ne $tmp_rest_of_errors -o $tmp_audits_failed -ne 0 -o $temp_severe_errors -ne 0 -o $get_repair_ratio_int -lt 95 -o \( $get_repair_started -ne 0 -a $put_repair_ratio_int -lt 95 \) -o $get_ratio_int -lt 90 -o $put_ratio_int -lt 90 -o $tmp_no_getput_1h -o $DEB -eq 1 ]; then 
-    if $DISCORDON; then
-        { ./discord.sh --webhook-url="$DISCORDURL" --username "health check" --text "$DLOG"; } 2>/dev/null
-        [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent."
-    fi
+    { ./discord.sh --webhook-url="$DISCORDURL" --username "health check" --text "$DLOG"; } 2>/dev/null
+    [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent."
 fi
-# separated satellites push from errors, occured last 1h - as scores last "longer"
+# separated satellites push from errors, occured last $LOGMIN - as scores last "longer"
 # and push frequency limited by $satellite_notification anyway
 if [ ! -z "$satellite_scores" ] && $satellite_notification && $DISCORDON
 then
@@ -716,7 +730,7 @@ then
     { ./discord.sh --webhook-url="$DISCORDURL" --username "one-day stats" --text "[$NODE]\n.. audits (r: $audit_recfailrate, c: $audit_failrate, s: $audit_successrate)\n.. downloads (c: $dl_canratio, f: $dl_failratio, s: $get_ratio_int%)\n.. uploads (c: $put_cancel_ratio, f: $put_fail_ratio, s: $put_ratio_int%)\n.. rep down (c: $get_repair_canratio, f: $get_repair_failratio, s: $get_repair_ratio_int%)\n.. rep up (c: $put_repair_canratio, f: $put_repair_failratio, s: $put_repair_ratio_int%)"; } 2>/dev/null
     [[ "$VERBOSE" == "true" ]] && echo " *** discord success rates push sent."
 fi
-
+fi
 
 
 # =============================================================================
@@ -750,7 +764,7 @@ if [[ $tmp_rest_of_errors -ne 0 ]]; then
 	fi
 fi
 if [[ $tmp_audits_failed -ne 0 ]]; then 
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : AUDIT ERRORS FOUND" --body "Recoverable: $audit_recfailrate \n\n$audit_failed_warn_text \n\nCritical: $audit_failrate \n\n$audit_failed_crit_text\n\nComplete: \n$AUDS " --silent "1"
+	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : AUDIT ERRORS FOUND" --body "Recoverable: $audit_recfailrate \n\n$audit_failed_warn_text \n\nCritical: $audit_failrate \n\n$audit_failed_crit_text" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** audit error mail sent."
 fi
 if [[ $audit_difference -gt 0 ]]; then 
