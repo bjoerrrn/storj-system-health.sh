@@ -85,6 +85,11 @@ NODELOGPATHS=/          # put your relative path + log file name here,
                         #  /,/                     -> for 2 node with non-redirected logs
                         #  /node1.log,/node2.log   -> for 2 nodes with redirects
                         #  /node.log,/             -> only 1st is redirected
+
+## log selection specifica - in alignment with cronjob settings
+LOGMIN=60               # latest log horizon to have a detailled view on, in minutes
+                        # -> change this, if your cronjob runs more often than 60m
+LOGMAX=1440             # larger log horizon for overall statistics, in minutes
 ```
 
 make sure, your script is executable by running the following command. add 'sudo' at the beginning, if admin privileges are required. 
