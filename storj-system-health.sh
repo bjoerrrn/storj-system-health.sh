@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.6.5
+# v1.6.6
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -158,6 +158,7 @@ else
         exit 2
     fi
     
+    
     if [[ -z "$NODELOGPATHS" ]]; then
         tmp_commas=
         for (( i=0; i<${#NODES[@]}; i++ ))
@@ -203,6 +204,9 @@ else
     # compare, if dates are equal or not
     # if unequal, perform satellite notification, else not
     difference=$(($settings_satellite_timestamp-$satping))
+    echo "current: $settings_satellite_timestamp"
+    echo "satping: $satping"
+    echo "difference: $difference"
     if [[ $difference -gt $SATPINGFREQ ]]
     then
         satellite_notification=true  # do perform the satellite notification
@@ -286,7 +290,7 @@ satellite_info_fulltext=$(echo -E $(curl -s "$node_url/api/sno/satellites"))
 satellite_scores=$(echo -E $(curl -s "$node_url/api/sno/satellites" |
 jq -r \
         --argjson auditScore 0.98 \
-        --argjson suspensionScore 0.96 \
+        --argjson suspensionScore 0.95 \
         --argjson onlineScore 0.95 \
         '.audits[] as $a | ($a.satelliteName | sub(":.*";"")) as $name |
         reduce ($ARGS.named|keys[]) as $key (
@@ -316,15 +320,18 @@ then
     # grab latest version from github
     storj_version_latest=$(curl --silent "https://api.github.com/repos/storj/storj/releases/latest" | jq -r '.tag_name' | cut -c 2-)
     storj_version_date=$(curl --silent "https://api.github.com/repos/storj/storj/releases/latest" | jq -r '.published_at')
+    RELEASEDATE=$(cut -c1-10 <<< $storj_version_date)
+    TODAY=$(date +%Y-%m-%d)
+    RELEASEDIFF=$(((`date -jf "%Y-%m-%d" "$TODAY" +%s` - `date -jf "%Y-%m-%d" "$RELEASEDATE" +%s`)/86400))
     # grab current version on this node
     storj_version_current=$(echo -E $(curl -s "$node_url/api/sno/" | jq -r '.version'))
     [[ "$VERBOSE" == "true" ]] && echo " *** storj node api url     : $node_url/api/sno (OK)"
     [[ "$VERBOSE" == "true" ]] && echo " *** storj version current  : installed $storj_version_current"
     [[ "$VERBOSE" == "true" ]] && echo " *** storj version latest   : github $storj_version_latest [$storj_version_date]"
-    if [[ "$storj_version_current" != "$storj_version_latest" ]]
+    if [[ "$storj_version_current" != "$storj_version_latest" ]] && [[ $RELEASEDIFF -ge 10 ]]
     then 
         storj_newer_version=true
-        echo "warning : there seems to be a newer version of storj available."
+        echo "warning : there is a newer version of storj available."
     fi
 else
     echo " *** node api url           : $node_url/api/sno -> not OK"
@@ -618,7 +625,7 @@ fi
 DLOG=""
 
 if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]] && [[ $tmp_audits_failed -eq 0 ]] && [[ $temp_severe_errors -eq 0 ]]; then 
-	DLOG="$DLOG [$NODE] : hdd $tmp_disk_usage => OK "
+	DLOG="$DLOG [$NODE] : hdd $tmp_disk_usage > OK "
 else
 	DLOG="**warning** [$NODE] : "
 fi
@@ -627,7 +634,7 @@ if [[ $tmp_audits_failed -ne 0 ]]; then
 	DLOG="$DLOG **audit errors** ($tmp_audits_failed -> recoverable: $audit_recfailrate; critical: $audit_failrate)"
 fi
 
-if [[ $audit_difference -gt 0 ]]; then
+if [[ $audit_difference -gt 1 ]]; then
 	DLOG="$DLOG **audit warning** pending audits: $audit_difference"
 fi
 
@@ -660,7 +667,7 @@ if [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]]; then
 fi
 
 if [[ "$storj_newer_version" == "true" ]] ; then
-    DLOG="$DLOG; \n.. storj version : $storj_version_current > $storj_version_latest [$storj_version_date]"
+    DLOG="$DLOG; \n.. new version : $storj_version_current > $storj_version_latest" #  [$storj_version_date]
 fi
 
 
@@ -767,7 +774,7 @@ if [[ $tmp_audits_failed -ne 0 ]]; then
 	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : AUDIT ERRORS FOUND" --body "Recoverable: $audit_recfailrate \n\n$audit_failed_warn_text \n\nCritical: $audit_failrate \n\n$audit_failed_crit_text" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** audit error mail sent."
 fi
-if [[ $audit_difference -gt 0 ]]; then 
+if [[ $audit_difference -gt 1 ]]; then 
 	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : AUDIT WARNING - pending audits" --body "Warning: there are $audit_difference pending audits, which have not yet been finished." --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** pending audit warning mail sent."
 fi
