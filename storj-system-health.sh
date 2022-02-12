@@ -25,6 +25,8 @@ settings_file=".storj-system-health"           # settings file path
 
 DEB=0                                          # debug mode flag
 VERBOSE=false                                  # verbose mode flag
+UNAMEOUT="$(uname -s)"                         # get OS name (darwin for mac os, linux etc.)
+TODAY=$(date +%Y-%m-%d)                        # todays date in format yyyy-mm-dd
 
 satellite_notification=false                   # send satellite notification flag
 settings_satellite_key="satping"               # settings satellite ping key
@@ -204,18 +206,18 @@ else
     # compare, if dates are equal or not
     # if unequal, perform satellite notification, else not
     difference=$(($settings_satellite_timestamp-$satping))
-    echo "current: $settings_satellite_timestamp"
-    echo "satping: $satping"
-    echo "difference: $difference"
+    #echo "current: $settings_satellite_timestamp"
+    #echo "satping: $satping"
+    #echo "difference: $difference"
     if [[ $difference -gt $SATPINGFREQ ]]
     then
         satellite_notification=true  # do perform the satellite notification
         updateSettingsSatellitePing  # replace old date with current date
     fi
-    if [[ $DEB -eq 1 ]]
-    then
-        satellite_notification=true  # do perform the satellite notification anyway when flag -d
-    fi
+    #if [[ $DEB -eq 1 ]]
+    #then
+    #    satellite_notification=true  # do perform the satellite notification anyway when flag -d
+    #fi
     [[ "$VERBOSE" == "true" ]] && echo " *** settings: satellite pings will be sent: $satellite_notification"
 fi 
 
@@ -315,20 +317,30 @@ storj_newer_version=false
 storj_version_current=""
 storj_version_latest=""
 storj_version_date=""
+
+RELEASEDATE=
+RELEASEDIFF=
+
 if [ ! -z "$satellite_info_fulltext" ]
 then 
     # grab latest version from github
     storj_version_latest=$(curl --silent "https://api.github.com/repos/storj/storj/releases/latest" | jq -r '.tag_name' | cut -c 2-)
     storj_version_date=$(curl --silent "https://api.github.com/repos/storj/storj/releases/latest" | jq -r '.published_at')
+    
     RELEASEDATE=$(cut -c1-10 <<< $storj_version_date)
-    TODAY=$(date +%Y-%m-%d)
-    RELEASEDIFF=$(((`date -jf "%Y-%m-%d" "$TODAY" +%s` - `date -jf "%Y-%m-%d" "$RELEASEDATE" +%s`)/86400))
+    
+    case "${UNAMEOUT}" in
+        Linux*)     RELEASEDIFF=$(((`date -d "$TODAY" +%s` - `date -d "$RELEASEDATE" +%s`)/86400));;
+        Darwin*)    RELEASEDIFF=$(((`date -jf "%Y-%m-%d" "$TODAY" +%s` - `date -jf "%Y-%m-%d" "$RELEASEDATE" +%s`)/86400));;
+        *)          RELEASEDIFF=0
+    esac
+    
     # grab current version on this node
     storj_version_current=$(echo -E $(curl -s "$node_url/api/sno/" | jq -r '.version'))
     [[ "$VERBOSE" == "true" ]] && echo " *** storj node api url     : $node_url/api/sno (OK)"
     [[ "$VERBOSE" == "true" ]] && echo " *** storj version current  : installed $storj_version_current"
-    [[ "$VERBOSE" == "true" ]] && echo " *** storj version latest   : github $storj_version_latest [$storj_version_date]"
-    if [[ "$storj_version_current" != "$storj_version_latest" ]] && [[ $RELEASEDIFF -ge 10 ]]
+    [[ "$VERBOSE" == "true" ]] && echo " *** storj version latest   : github $storj_version_latest [$RELEASEDATE]"
+    if [[ "$storj_version_current" != "$storj_version_latest" ]] && [[ $RELEASEDIFF -gt 10 ]]
     then 
         storj_newer_version=true
         echo "warning : there is a newer version of storj available."
@@ -718,21 +730,34 @@ fi
 
 cd $DIR
 
-if $DISCORDON; then
+if [[ "$DISCORDON" == "true" ]]; then
 # send discord push
-if [ $tmp_fatal_errors -ne 0 -o $tmp_io_errors -ne $tmp_rest_of_errors -o $tmp_audits_failed -ne 0 -o $temp_severe_errors -ne 0 -o $get_repair_ratio_int -lt 95 -o \( $get_repair_started -ne 0 -a $put_repair_ratio_int -lt 95 \) -o $get_ratio_int -lt 90 -o $put_ratio_int -lt 90 -o $tmp_no_getput_1h -o $DEB -eq 1 ]; then 
+
+#[[ $tmp_fatal_errors -ne 0 ]] && echo true || echo false
+#[[ $tmp_io_errors -ne $tmp_rest_of_errors ]] && echo true || echo false
+#[[ $tmp_audits_failed -ne 0 ]] && echo true || echo false
+#[[ $temp_severe_errors -ne 0 ]] && echo true || echo false
+#[[ $put_repair_ratio_int -lt 95 ]] && echo true || echo false
+#[[ $get_repair_started -ne 0 ]] && echo true || echo false
+#[[ $get_repair_ratio_int -lt 95 ]] && echo true || echo false # --> true
+#[[ $get_ratio_int -lt 90 ]] && echo true || echo false
+#[[ $put_ratio_int -lt 90 ]] && echo true || echo false
+#[[ "$tmp_no_getput_1h" == "true" ]] && echo true || echo false # --> true
+#[[ $DEB -eq 1 ]] && echo true || echo false
+
+if [ $tmp_fatal_errors -ne 0 -o $tmp_io_errors -ne $tmp_rest_of_errors -o $tmp_audits_failed -ne 0 -o $temp_severe_errors -ne 0 -o $put_repair_ratio_int -lt 95 -o \( $get_repair_started -ne 0 -a $get_repair_ratio_int -lt 95 \) -o $get_ratio_int -lt 90 -o $put_ratio_int -lt 90 -o "$tmp_no_getput_1h" == "true" -o $DEB -eq 1 ]; then 
     { ./discord.sh --webhook-url="$DISCORDURL" --username "health check" --text "$DLOG"; } 2>/dev/null
     [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent."
 fi
 # separated satellites push from errors, occured last $LOGMIN - as scores last "longer"
 # and push frequency limited by $satellite_notification anyway
-if [ ! -z "$satellite_scores" ] && $satellite_notification && $DISCORDON
+if [ ! -z "$satellite_scores" ] && [[ "$satellite_notification" == "true" ]] && [[ "$DISCORDON" == "true" ]]
 then
     { ./discord.sh --webhook-url="$DISCORDURL" --username "satellites warning" --text "[$NODE]: $satellite_scores"; } 2>/dev/null
     [[ "$VERBOSE" == "true" ]] && echo " *** discord satellite push sent."
 fi
 # in case of discord debug mode is on, also send success statistics
-if [[ $DEB -eq 1 ]] && $DISCORDON
+if [[ $DEB -eq 1 ]] && [[ "$DISCORDON" == "true" ]]
 then
     { ./discord.sh --webhook-url="$DISCORDURL" --username "one-day stats" --text "[$NODE]\n.. audits (r: $audit_recfailrate, c: $audit_failrate, s: $audit_successrate)\n.. downloads (c: $dl_canratio, f: $dl_failratio, s: $get_ratio_int%)\n.. uploads (c: $put_cancel_ratio, f: $put_fail_ratio, s: $put_ratio_int%)\n.. rep down (c: $get_repair_canratio, f: $get_repair_failratio, s: $get_repair_ratio_int%)\n.. rep up (c: $put_repair_canratio, f: $put_repair_failratio, s: $put_repair_ratio_int%)"; } 2>/dev/null
     [[ "$VERBOSE" == "true" ]] && echo " *** discord success rates push sent."
@@ -745,9 +770,9 @@ fi
 # ------------------------------------
 
 # send email alerts
-if $MAILON; then
+if [[ "$MAILON" == "true" ]]; then
 
-if [ ! -z "$satellite_scores" ] && $satellite_notification; then
+if [ ! -z "$satellite_scores" ] && [[ "$satellite_notification" == "true" ]]; then
     swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : SATELLITE SCORES BELOW THRESHOLD" --body "$satellite_scores" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** satellite warning mail sent."
 fi
@@ -760,7 +785,7 @@ if [[ $temp_severe_errors -ne 0 ]]; then
 	[[ "$VERBOSE" == "true" ]] && echo " *** severe error mail sent."
 fi
 if [[ $tmp_rest_of_errors -ne 0 ]]; then
-	if $ignore_rest_of_errors; then
+	if [[ "$ignore_rest_of_errors" == "true" ]]; then
 		if [[ $DEB -eq 1 ]]; then
 			swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : OTHER ERRORS FOUND" --body "$ERRS" --silent "1"
 			[[ "$VERBOSE" == "true" ]] && echo " *** general error mail sent (ignore case: $ignore_rest_of_errors)."
@@ -793,7 +818,7 @@ fi
 ###   if relevant for you, enable the mail alert below.
 else
 	[[ "$VERBOSE" == "true" ]] && echo "warning: $NODE not running."
-	if $DISCORDON; then
+	if [[ "$DISCORDON" == "true" ]]; then
 	    cd $DIR
 	    { ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "**warning :** $NODE not running!"; } 2>/dev/null
 	fi
