@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.6.6
+# v1.6.7
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -264,6 +264,7 @@ readonly DOCKERPS="$(docker ps)"
 ## go through the list of storagenodes
 for (( i=0; i<${#NODES[@]}; i++ )); do
 NODE=${NODES[$i]}
+node_url=${NODEURLS[$i]}
 
 [[ "$VERBOSE" == "true" ]] && echo "==="
 [[ "$VERBOSE" == "true" ]] && echo "running the script for node \"$NODE\" (${MOUNTPOINTS[$i]}) .."
@@ -277,16 +278,24 @@ RUNNING="$(echo "$DOCKERPS" 2>&1 | grep "$NODE" -c)"
 if [[ $RUNNING -eq 1 ]]; then
 # (if statement is closed at the end of this script)
 
-# grab (real) disk usage
-tmp_disk_usage="$(df ${MOUNTPOINTS[$i]} | grep / | awk '{ print $5}' | sed 's/%//g')%"
 
+# grab (real) disk usage
+
+# old: tmp_disk_usage="$(df ${MOUNTPOINTS[$i]} | grep / | awk '{ print $5}' | sed 's/%//g')%"
+space_used=$(echo -E $(curl -s "$node_url/api/sno/" | jq '.diskSpace.used'))
+space_total=$(echo -E $(curl -s "$node_url/api/sno/" | jq '.diskSpace.available'))
+space_trash=$(echo -E $(curl -s "$node_url/api/sno/" | jq '.diskSpace.trash'))
+space_overused=$(echo -E $(curl -s "$node_url/api/sno/" | jq '.diskSpace.overused'))
+tmp_disk_usage="$(((space_used*100)/(space_total))).$(((space_used*10000)/(space_total)-(((space_used*100)/(space_total))*100)))%"
+tmp_disk_gross="$((((space_used+space_trash)*100)/(space_total))).$((((space_used+space_trash)*10000)/(space_total)-((((space_used+space_trash)*100)/(space_total))*100)))%"
+[[ "$VERBOSE" == "true" ]] && echo " *** disk usage             : $tmp_disk_usage (incl. trash: $tmp_disk_gross)"
+tmp_overused_warning=false
+[[ "$VERBOSE" == "true" ]] && [[ $space_overused -gt 0 ]] && echo "warning: space overused is greater than zero!" && $tmp_overused_warning=true
 
 
 # CHECK SATELLITE SCORES
 # ------------------------------------
 
-# grab satellite scores
-node_url=${NODEURLS[$i]}
 # check availability of api/sno/satellites
 satellite_info_fulltext=$(echo -E $(curl -s "$node_url/api/sno/satellites"))
 satellite_scores=$(echo -E $(curl -s "$node_url/api/sno/satellites" |
@@ -637,34 +646,39 @@ fi
 DLOG=""
 
 if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]] && [[ $tmp_audits_failed -eq 0 ]] && [[ $temp_severe_errors -eq 0 ]]; then 
-	DLOG="$DLOG [$NODE] : hdd $tmp_disk_usage > OK "
+	DLOG="$DLOG [$NODE] : hdd $tmp_disk_usage ($tmp_disk_gross) > OK "
 else
 	DLOG="**warning** [$NODE] : "
 fi
 
 if [[ $tmp_audits_failed -ne 0 ]]; then
-	DLOG="$DLOG **audit errors** ($tmp_audits_failed -> recoverable: $audit_recfailrate; critical: $audit_failrate)"
+	DLOG="$DLOG audit issues ($tmp_audits_failed; recoverable: $audit_recfailrate; critical: $audit_failrate)"
 fi
 
 if [[ $audit_difference -gt 1 ]]; then
-	DLOG="$DLOG **audit warning** pending audits: $audit_difference"
+	DLOG="$DLOG audit warning (pending: $audit_difference)"
 fi
 
 if [[ $temp_severe_errors -ne 0 ]]; then
-	DLOG="$DLOG **severe errors** ($temp_severe_errors)"
+	DLOG="$DLOG severe issues ($temp_severe_errors)"
 fi
 
 if [[ $tmp_fatal_errors -ne 0 ]]; then
-	DLOG="$DLOG **fatal errors** ($tmp_fatal_errors)"
+	DLOG="$DLOG fatal issues ($tmp_fatal_errors)"
 fi
 
 if [[ $tmp_rest_of_errors -ne 0 ]]; then
 	if [[ $tmp_io_errors -ne $tmp_rest_of_errors ]]; then
-		DLOG="$DLOG **other errors** ($tmp_rest_of_errors)"
+		DLOG="$DLOG other issues ($tmp_rest_of_errors)"
 	else
 		DLOG="$DLOG (skipped io)"
 	fi
 fi
+
+if [[ "$tmp_overused_warning" == "true" ]] ; then
+    DLOG="$DLOG; \n.. space warning : overused"
+fi
+
 
 if [ $get_repair_started -ne 0 -a \( $get_repair_ratio_int -lt 95 -o $put_repair_ratio_int -lt 95 \) ]; then
 	DLOG="$DLOG; \n.. warning !! rep ↓ $get_repair_ratio_int / ↑ $put_repair_ratio_int \n-> risk of getting disqualified"
