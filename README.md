@@ -1,7 +1,7 @@
 # storj-system-health.sh
 
 ## about this shell script
-this linux shell script checks, if a [storj node][storagenode] ([:storage node] from the [storj][storj] project) runs into errors and alerts the operator by discord push messages as well as emails. requires at least one [storj node][storagenode] running with [docker][docker] on linux.
+this linux shell script checks, if a [storj node][storagenode] (from the [storj][storj] project) runs into errors and alerts the operator by discord push messages as well as emails. requires at least one [storj node][storagenode] running with [docker][docker] on linux.
 
 ## features
 * multinode support 🌍
