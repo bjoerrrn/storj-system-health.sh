@@ -25,6 +25,7 @@ settings_file=".storj-system-health"           # settings file path
 
 DEB=0                                          # debug mode flag
 VERBOSE=false                                  # verbose mode flag
+LOGMIN_OVERRIDE=0                              # LOGMIN override flag 
 UNAMEOUT="$(uname -s)"                         # get OS name (darwin for mac os, linux etc.)
 TODAY=$(date +%Y-%m-%d)                        # todays date in format yyyy-mm-dd
 
@@ -45,11 +46,12 @@ General options:
   -d            Debug mode: send discord push if health check ok
   -m            Debug mode: discord push + test settings by sending test mail
   -p <path>     Provide a path to support crontab on MacOS
+  -l <int>.     Override LOGMIN specified in settings, format: minutes as integer
   -v            Verbose option to enable console output while execution"
 
 # parameter handling
 
-while getopts ":hc:s:dmp:v" flag
+while getopts ":hc:s:dmp:l:v" flag
 do
     case "${flag}" in
         c) config_file=${OPTARG};;
@@ -57,6 +59,7 @@ do
         d) DEB=1;;
         m) DEB=2;;
         p) PATH=${OPTARG};;
+        l) LOGMIN_OVERRIDE=${OPTARG};;
         v) VERBOSE=true;;
         h | *) echo "$help_text" && exit 0;;
     esac
@@ -186,6 +189,7 @@ else
     [[ "$VERBOSE" == "true" ]] && echo " *** config file loaded"
 fi
 
+[[ "$VERBOSE" == "true" ]] && [[ $LOGMIN_OVERRIDE -gt 0 ]] && echo " *** settings: logs from the last $LOGMIN_OVERRIDE minutes will be selected"
 
 # loads settings file into variables
 if [ ! -r "$settings_file" ]; then
@@ -362,6 +366,7 @@ fi
 LOG1D=""
 LOG1H=""
 NODELOGPATH=${NODELOGPATHS[$i]}
+[[ $LOGMIN_OVERRIDE -gt 0 ]] && LOGMIN=$LOGMIN_OVERRIDE
 if [[ "$NODELOGPATH" == "/" ]]
 then 
     # docker log selection from the last 24 hours and 1 hour
@@ -469,7 +474,7 @@ fi
 
 [[ "$VERBOSE" == "true" ]] && echo " *** audits                 : warn: $audit_recfailrate, crit: $audit_failrate, s: $audit_successrate"
 if [[ "$VERBOSE" == "true" ]] && [[ $audit_difference -gt 0 ]]; then
-                              echo " ***                          warning:         -> there are audits pending and not finished ($audit_difference)"
+                              echo "warning:                      -> there are audits pending and not finished ($audit_difference)"
 fi
 
 ## download stats
