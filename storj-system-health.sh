@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.6.8
+# v1.6.9
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -617,7 +617,9 @@ puts_recent_hour=$(echo "$LOG1H" 2>&1 | grep '"PUT"' -c)
 tmp_no_getput_1h=false
 [[ $gets_recent_hour -eq 0 ]] && tmp_no_getput_1h=true
 [[ $puts_recent_hour -eq 0 ]] && tmp_no_getput_1h=true
-[[ "$VERBOSE" == "true" ]] && echo " *** $LOGMIN minutes activity : up: $gets_recent_hour / down: $puts_recent_hour / $tmp_no_getput_1h"
+tmp_no_getput_ok="OK"
+[[ "$tmp_no_getput_1h" == "true" ]] && tmp_no_getput_ok="NOK"
+[[ "$VERBOSE" == "true" ]] && echo " *** $LOGMIN m activity : up: $gets_recent_hour / down: $puts_recent_hour > $tmp_no_getput_ok"
 
 
 # ignore i/o timeouts (satellite service pings + single satellite connects), if audit success rate is 100% and there are no other errors as well
