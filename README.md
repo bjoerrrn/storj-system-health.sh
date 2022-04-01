@@ -24,7 +24,7 @@ this linux/macos shell script checks, if a [storj node][storagenode] (from the [
 
 ## optimzed / tested for
 - debian bullseye 🐧
-- macos monterey 🍎 (jq + swaks installed with brew)
+- macos monterey 🍎 ([jq][jq] + [swaks][swaks] installed with [brew][brew])
 
 ## dependencies
 - [storj node][storagenode] node up and running, within a 
@@ -176,6 +176,7 @@ success rates per node
 <!-- Programs -->
 [discord.sh]: https://github.com/ChaoticWeg/discord.sh
 [successrates.sh]: https://github.com/ReneSmeekes/storj_success_rate
+[brew]: https://github.com/Homebrew/brew
 [curl]: https://curl.haxx.se/
 [jq]: https://stedolan.github.io/jq/
 [storj]: https://www.storj.io
