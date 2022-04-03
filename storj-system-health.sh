@@ -463,7 +463,7 @@ then
 fi
 if [ $(($audit_success+$audit_failed_crit+$audit_failed_warn)) -ge 1 ]
 then
-    audit_successrate=$(printf '%.2f\n' $(echo -e "$audit_success $audit_failed_crit $audit_failed_warn" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
+    audit_successrate=$(printf '%.0f\n' $(echo -e "$audit_success $audit_failed_crit $audit_failed_warn" | awk '{print ( $1 / ( $1 + $2 + $3 )) * 100 }'))%
 else
     audit_successrate=0.000%
 fi
