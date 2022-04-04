@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.7.1
+# v1.7.2
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -32,6 +32,7 @@ TODAY=$(date +%Y-%m-%d)                        # todays date in format yyyy-mm-d
 satellite_notification=false                   # send satellite notification flag
 settings_satellite_key="satping"               # settings satellite ping key
 settings_satellite_timestamp=$(date +%s)       # settings satellite ping value of now
+audit_difference_repeat=false                  # help variable in case of pending audits
 
 # help text
 
@@ -405,6 +406,7 @@ audit_failed_crit_text=""
 audit_recfailrate=0.00%
 audit_failrate=0.00%
 audit_successrate=100%
+audit_difference=0
 
 
 # =============================================================================
@@ -420,7 +422,10 @@ DREPS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_REPAIR' | grep 'failed')"
 PREPS="$(echo "$LOG1H" 2>&1 | grep -E 'PUT_REPAIR' | grep 'failed')"
 
 # added "severe" errors in order to recognize e.g. docker issues, connectivity issues etc.
-SEVERE="$(echo "$LOG1H" 2>&1 | grep -i -e 'error:' -e 'fatal:' -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -e 'Unable to read the disk' -e 'software caused connection abort' | grep -v -e 'emptying trash failed' -e 'INFO' -e 'FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity' -e 'failed to settle orders for satellite' -e 'rpc client error when closing sender')"
+SEVERE="$(echo "$LOG1H" 2>&1 | grep -i -e 'error:' -e 'fatal:' -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -e 'Unable to read the disk' -e 'software caused connection abort' | grep -v -e 'emptying trash failed' -e 'INFO' -e 'FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity' -e 'failed to settle orders for satellite' -e 'rpc client')"
+
+# if selected errors are equal between ERRS / SEVERE, keep just one of them
+[[ "$SEVERE" == "$ERRS" ]] && SEVERE=""
 
 # count errors 
 [[ "$VERBOSE" == "true" ]] && tmp_info="$(echo "$INFO" 2>&1 | grep 'INFO' -c)"
@@ -468,12 +473,17 @@ else
     audit_successrate=0.000%
 fi
 #check difference started - success - failed
-audit_difference=0
 if [[ $audit_started -gt 0 ]]
 then 
     # there are audits, which have been started, but are not finished
     # more than 2 pending audits = warning alert to be sent
     audit_difference=$(($audit_started-$audit_success-$audit_failed_crit-$audit_failed_warn))
+    # run the script for that node again once
+    if [[ $audit_difference -gt 0 ]] && [[ "$audit_difference_repeat" == "false" ]]; then
+        $audit_difference_repeat=true
+    else 
+        $audit_difference_repeat=false
+    fi
 fi
 
 [[ "$VERBOSE" == "true" ]] && echo " *** audits                 : warn: $audit_recfailrate, crit: $audit_failrate, s: $audit_successrate"
@@ -838,9 +848,12 @@ if [[ $tmp_audits_failed -ne 0 ]]; then
 	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : AUDIT ERRORS FOUND" --body "Recoverable: $audit_failed_warn / $audit_recfailrate \n\n$audit_failed_warn_text \n\nCritical: $audit_failed_crit / $audit_failrate \n\n$audit_failed_crit_text" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** audit error mail sent."
 fi
-if [[ $audit_difference -gt 1 ]]; then 
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : AUDIT WARNING - pending audits" --body "Warning: there are $audit_difference pending audits, which have not yet been finished." --silent "1"
-	[[ "$VERBOSE" == "true" ]] && echo " *** pending audit warning mail sent."
+if [[ "$audit_difference_repeat" == "false" ]]; then
+    # only alert when there is a) just one or b) the first run done of the "audit pending loop"
+    if [[ $audit_difference -gt 0 ]]; then 
+	    swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : AUDIT WARNING - pending audits" --body "Warning: there are $audit_difference pending audits, which have not yet been finished." --silent "1"
+	    [[ "$VERBOSE" == "true" ]] && echo " *** pending audit warning mail sent."
+	fi
 fi
 if [[ $tmp_reps_failed -ne 0 ]]; then 
 	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : REPAIR FAILURES FOUND" --body "Download: $get_repair_failed_text \n\nUppload: $put_repair_failed_text" --silent "1"
@@ -868,4 +881,11 @@ else
 	#swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : NOT RUNNING" --body "warning: storage node is not running." --silent "1"
 fi
 
-done # end of while command of storagenodes list
+
+# if there are pending audits, run the script for the specific node a second time after 5 mins
+if [[ $audit_difference -gt 0 ]] && [[ "$audit_difference_repeat" == "true" ]]; then
+    i = $((i-1))                         # repeat the loop with current i value
+    sleep 5m                             # sleep for 5mins to allow audits to be finalized
+fi
+
+done # end of storagenodes FOR loop
