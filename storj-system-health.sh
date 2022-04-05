@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.7.2
+# v1.7.3
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -480,9 +480,9 @@ then
     audit_difference=$(($audit_started-$audit_success-$audit_failed_crit-$audit_failed_warn))
     # run the script for that node again once
     if [[ $audit_difference -gt 0 ]] && [[ "$audit_difference_repeat" == "false" ]]; then
-        $audit_difference_repeat=true
+        audit_difference_repeat=true
     else 
-        $audit_difference_repeat=false
+        audit_difference_repeat=false
     fi
 fi
 
