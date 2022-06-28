@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.7.3
+# v1.7.4
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -383,7 +383,16 @@ then
     [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" $NODE 2>&1 | grep '' -c)"
     [[ "$VERBOSE" == "true" ]] && echo " *** docker log $tmp_logmin selected : #$tmp_count"
 else
-    if [ -r "${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]}" ]; then
+    if [ -r "${NODELOGPATHS[$i]}" ]; then
+        # log file selection, in case log is stored in a file
+        LOG1D="$(cat ${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - $LOGMAX minutes' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
+        [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1D" 2>&1 | grep '' -c)"
+        [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded $LOGMAX minutes : #$tmp_count"
+        LOG1H="$(cat ${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - $LOGMIN minutes' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
+        [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" 2>&1 | grep '' -c)"
+        [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded $LOGMIN minutes : #$tmp_count"
+        
+    elif [ -r "${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]}" ]; then
         # log file selection, in case log is stored in a file
         LOG1D="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - $LOGMAX minutes' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
         [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1D" 2>&1 | grep '' -c)"
@@ -394,6 +403,7 @@ else
     else
         echo "warning : redirected log file does not exist or is not readable:"
         echo "          ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]}"
+        echo "     nor  ${NODELOGPATHS[$i]}"
     fi
 fi
 
