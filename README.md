@@ -86,6 +86,7 @@ NODELOGPATHS=/          # put your relative path + log file name here,
                         #  /,/                     -> for 2 node with non-redirected logs
                         #  /node1.log,/node2.log   -> for 2 nodes with redirects
                         #  /node.log,/             -> only 1st is redirected
+                        #  /mnt/hdd1/node.log      -> full path possible, too
 
 ## log selection specifica - in alignment with cronjob settings
 LOGMIN=60               # latest log horizon to have a detailled view on, in minutes
