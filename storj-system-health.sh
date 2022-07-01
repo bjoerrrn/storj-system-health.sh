@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.7.5
+# v1.7.6
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -383,31 +383,42 @@ then
     [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" $NODE 2>&1 | grep '' -c)"
     [[ "$VERBOSE" == "true" ]] && echo " *** docker log $tmp_logmin selected : #$tmp_count"
 else
+    # log file selection, in case log is stored in a file
+    
+    tmp_logpath=""
     if [ -r "${NODELOGPATHS[$i]}" ]; then
-        # log file selection, in case log is stored in a file
-        LOGMAXDATE=$(TZ=UTC date --date="$LOGMAX minutes ago" +'%Y-%m-%dT%H:%M:%S.000Z')
-        LOG1D="$(cat ${NODELOGPATHS[$i]} | awk -v date="$LOGMAXDATE" '$1 > date')"
-        [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1D" 2>&1 | grep '' -c)"
-        [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded $LOGMAX minutes : #$tmp_count"
-        LOGMINDATE=$(TZ=UTC date --date="$LOGMIN minutes ago" +'%Y-%m-%dT%H:%M:%S.000Z')
-        LOG1H="$(cat ${NODELOGPATHS[$i]} | awk -v date="$LOGMINDATE" '$1 > date')"
-        [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" 2>&1 | grep '' -c)"
-        [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded $LOGMIN minutes : #$tmp_count"
-        
+        tmp_logpath="${NODELOGPATHS[$i]}"
     elif [ -r "${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]}" ]; then
-        # log file selection, in case log is stored in a file
-        LOGMAXDATE=$(TZ=UTC date --date="$LOGMAX minutes ago" +'%Y-%m-%dT%H:%M:%S.000Z')
-        LOG1D="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v date="$LOGMAXDATE" '$1 > date')"
-        [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1D" 2>&1 | grep '' -c)"
-        [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded $LOGMAX minutes : #$tmp_count"
-        LOGMINDATE=$(TZ=UTC date --date="$LOGMIN minutes ago" +'%Y-%m-%dT%H:%M:%S.000Z')
-        LOG1H="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v date="$LOGMINDATE" '$1 > date')"
-        [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" 2>&1 | grep '' -c)"
-        [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded $LOGMIN minutes : #$tmp_count"
-    else
+        tmp_logpath="${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]}"
+    else 
         echo "warning : redirected log file does not exist or is not readable:"
         echo "          ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]}"
         echo "     nor  ${NODELOGPATHS[$i]}"
+    fi
+    
+    if [[ "$UNAMEOUT" == "Darwin" ]] ; then
+        # select with macos specific date formula
+        # cat $tmp_logpath | awk -v date=`TZ=UTC date -v-$tmp_logmax +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > date' 
+        tmp_logmax="$LOGMAX"
+        tmp_logmax+="M"
+        tmp_logmin="$LOGMIN"
+        tmp_logmin+="M"
+        LOG1D="$(cat $tmp_logpath | awk -v date=`TZ=UTC date -v-$tmp_logmax +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > date' )"
+            [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1D" 2>&1 | grep '' -c)"
+            [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded $LOGMAX minutes : #$tmp_count"
+        LOG1H="$(cat $tmp_logpath | awk -v date=`TZ=UTC date -v-$tmp_logmin +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > date' )"
+            [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" 2>&1 | grep '' -c)"
+            [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded $LOGMIN minutes : #$tmp_count"
+    else
+        # select with linux specific date formula
+        LOGMAXDATE=$(TZ=UTC date --date="$LOGMAX minutes ago" +'%Y-%m-%dT%H:%M:%S.000Z')
+        LOG1D="$(cat $tmp_logpath | awk -v date="$LOGMAXDATE" '$1 > date')"
+            [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1D" 2>&1 | grep '' -c)"
+            [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded $LOGMAX minutes : #$tmp_count"
+        LOGMINDATE=$(TZ=UTC date --date="$LOGMIN minutes ago" +'%Y-%m-%dT%H:%M:%S.000Z')
+        LOG1H="$(cat $tmp_logpath | awk -v date="$LOGMINDATE" '$1 > date')"
+            [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" 2>&1 | grep '' -c)"
+            [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded $LOGMIN minutes : #$tmp_count"
     fi
 fi
 
