@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.7.4
+# v1.7.5
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -385,19 +385,23 @@ then
 else
     if [ -r "${NODELOGPATHS[$i]}" ]; then
         # log file selection, in case log is stored in a file
-        LOG1D="$(cat ${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - $LOGMAX minutes' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
+        LOGMAXDATE=$(TZ=UTC date --date="$LOGMAX minutes ago" +'%Y-%m-%dT%H:%M:%S.000Z')
+        LOG1D="$(cat ${NODELOGPATHS[$i]} | awk -v date="$LOGMAXDATE" '$1 > date')"
         [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1D" 2>&1 | grep '' -c)"
         [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded $LOGMAX minutes : #$tmp_count"
-        LOG1H="$(cat ${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - $LOGMIN minutes' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
+        LOGMINDATE=$(TZ=UTC date --date="$LOGMIN minutes ago" +'%Y-%m-%dT%H:%M:%S.000Z')
+        LOG1H="$(cat ${NODELOGPATHS[$i]} | awk -v date="$LOGMINDATE" '$1 > date')"
         [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" 2>&1 | grep '' -c)"
         [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded $LOGMIN minutes : #$tmp_count"
         
     elif [ -r "${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]}" ]; then
         # log file selection, in case log is stored in a file
-        LOG1D="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - $LOGMAX minutes' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
+        LOGMAXDATE=$(TZ=UTC date --date="$LOGMAX minutes ago" +'%Y-%m-%dT%H:%M:%S.000Z')
+        LOG1D="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v date="$LOGMAXDATE" '$1 > date')"
         [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1D" 2>&1 | grep '' -c)"
         [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded $LOGMAX minutes : #$tmp_count"
-        LOG1H="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v Date=`date -d 'now - $LOGMIN minutes' +'%Y-%m-%dT%H:%M:%S.000Z'` '$1 > Date')"
+        LOGMINDATE=$(TZ=UTC date --date="$LOGMIN minutes ago" +'%Y-%m-%dT%H:%M:%S.000Z')
+        LOG1H="$(cat ${MOUNTPOINTS[$i]}${NODELOGPATHS[$i]} | awk -v date="$LOGMINDATE" '$1 > date')"
         [[ "$VERBOSE" == "true" ]] && tmp_count="$(echo "$LOG1H" 2>&1 | grep '' -c)"
         [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded $LOGMIN minutes : #$tmp_count"
     else
