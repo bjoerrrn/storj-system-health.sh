@@ -18,6 +18,8 @@ this linux/macos shell script checks, if a [storj node][storagenode] (from the [
 * reports: 📰
   * disk usage
   * success rates audits, downloads, uploads, repair up-/downloads
+  * estimated payouts for today and current month
+  * todays upload and download statistics
 * optimized for crontab and command line usage 💻
 * supports redirected logs [to a file][log_redirect]
 * only requires [curl][curl], [jq][jq] and (optionally) [swaks][swaks] to run 🔥 
