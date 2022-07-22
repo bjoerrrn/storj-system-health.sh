@@ -31,6 +31,7 @@ this linux/macos shell script checks, if a [storj node][storagenode] (from the [
 - [docker][docker] container
 - [curl][curl] (http requests)
 - [jq][jq] 1.6 ⚠️ (JSON parsing)
+- [bc][bc] (arbitrary precision calculator)
 - [swaks][swaks] (mail sending, smtp)
 - [discord.sh][discord.sh] (discord pushes)
 
@@ -181,6 +182,7 @@ if you want to contact me directly, feel free to do so via discord: https://disc
 [successrates.sh]: https://github.com/ReneSmeekes/storj_success_rate
 [brew]: https://github.com/Homebrew/brew
 [curl]: https://curl.haxx.se/
+[bc]: https://www.gnu.org/software/bc/manual/html_mono/bc.html
 [jq]: https://stedolan.github.io/jq/
 [storj]: https://www.storj.io
 [docker]: https://github.com/docker
