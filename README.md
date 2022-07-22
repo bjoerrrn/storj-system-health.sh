@@ -22,7 +22,7 @@ this linux/macos shell script checks, if a [storj node][storagenode] (from the [
   * todays upload and download statistics
 * optimized for crontab and command line usage 💻
 * supports redirected logs [to a file][log_redirect]
-* only requires [curl][curl], [jq][jq] and (optionally) [swaks][swaks] to run 🔥 
+* only requires [curl][curl], [jq][jq], [bc][bc] and (optionally) [swaks][swaks] to run 🔥 
 
 ## optimzed / tested for
 - debian bullseye 🐧
