@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.7.6
+# v1.8.0a
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -22,17 +22,19 @@ renice 19 $$
 
 config_file="./storj-system-health.credo"      # config file path
 settings_file=".storj-system-health"           # settings file path
+declare -A settings                            # declare associative array settings
 
 DEB=0                                          # debug mode flag
 VERBOSE=false                                  # verbose mode flag
 LOGMIN_OVERRIDE=0                              # LOGMIN override flag 
 UNAMEOUT="$(uname -s)"                         # get OS name (darwin for mac os, linux etc.)
-TODAY=$(date +%Y-%m-%d)                        # todays date in format yyyy-mm-dd
+TODAY=$(date +"%Y-%m-%d")                      # todays date in format yyyy-mm-dd
 
 satellite_notification=false                   # send satellite notification flag
 settings_satellite_key="satping"               # settings satellite ping key
-settings_satellite_timestamp=$(date +%s)       # settings satellite ping value of now
+settings_satellite_timestamp=$(date +"%s")     # settings satellite ping value of now
 audit_difference_repeat=false                  # help variable in case of pending audits
+include_current_earnings=false                 # show current month's earnings yes/no
 
 # help text
 
@@ -43,16 +45,17 @@ Example: $0 -dv
 General options:
   -h            Display this help and exit
   -c <path>     Use individual file path for properties
-  -s <path>     Use individual fiel path for settings
   -d            Debug mode: send discord push if health check ok
+  -e            Show current month's earnings
+  -l <int>.     Override LOGMIN specified in settings, format: minutes as integer
   -m            Debug mode: discord push + test settings by sending test mail
   -p <path>     Provide a path to support crontab on MacOS
-  -l <int>.     Override LOGMIN specified in settings, format: minutes as integer
+  -s <path>     Use individual fiel path for settings
   -v            Verbose option to enable console output while execution"
 
 # parameter handling
 
-while getopts ":hc:s:dmp:l:v" flag
+while getopts ":hc:s:dmp:l:ve" flag
 do
     case "${flag}" in
         c) config_file=${OPTARG};;
@@ -62,6 +65,7 @@ do
         p) PATH=${OPTARG};;
         l) LOGMIN_OVERRIDE=${OPTARG};;
         v) VERBOSE=true;;
+        e) include_current_earnings=true;;
         h | *) echo "$help_text" && exit 0;;
     esac
 done
@@ -80,12 +84,35 @@ DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
 # DEFINE FUNCTIONS
 # ------------------------------------
 
-function updateSettingsSatellitePing() {
-    sed -i -e "s/$settings_satellite_key=$satping/$settings_satellite_key=$settings_satellite_timestamp/g" "$settings_file"
-    [[ "$VERBOSE" == "true" ]] && echo " *** settings: latest satellite ping saved [$(date +'%d.%m.%Y %H:%M')]."
+# function updateSettingsSatellitePing() {
+#     sed -i -e "s/$settings_satellite_key=.*/$settings_satellite_key=$settings_satellite_timestamp/g" "$settings_file"
+    # sed -i -e "s/$settings_satellite_key=$satping/$settings_satellite_key=$settings_satellite_timestamp/g" "$settings_file"
+#     [[ "$VERBOSE" == "true" ]] && echo " *** settings: latest satellite ping saved [$(date +'%d.%m.%Y %H:%M')]."
+# }
+
+# function updateSettingsAddMissingFields() {
+    # adds a list of new keys into the settings file
+    # for keyToAdd in "$@"
+    # do
+    #     echo "$keyToAdd=" >> $settings_file
+    #     [[ "$VERBOSE" == "true" ]] && echo " *** settings: $keyToAdd key added."
+    # done
+# }
+
+function updateSettings() {
+    k="${1}" # key passed
+    v="${2}" # value passed
+    
+    if ! grep -R "^[#]*\s*${k}=.*" $settings_file > /dev/null; then
+        echo "$k=$v" >> $settings_file
+        [[ "$VERBOSE" == "true" ]] && echo " *** settings: added key '${k}', because it was not found."
+    else
+        sed -ir "s/^[#]*\s*${k}=.*/$k=$v/" $settings_file
+        [[ "$VERBOSE" == "true" ]] && echo " *** settings: replacing value of key '${k}' with value '${v}'."
+    fi
 }
 
-function restoreSettings() {
+function initSettings() {
     [[ "$VERBOSE" == "true" ]] && echo " *** settings: restoring file:"
     echo "$settings_satellite_key=$settings_satellite_timestamp" > $settings_file
     [[ "$VERBOSE" == "true" ]] && echo " *** settings: latest satellite ping saved [$(date +'%d.%m.%Y %H:%M')]."
@@ -192,22 +219,29 @@ fi
 
 [[ "$VERBOSE" == "true" ]] && [[ $LOGMIN_OVERRIDE -gt 0 ]] && echo " *** settings: logs from the last $LOGMIN_OVERRIDE minutes will be selected"
 
+
+# =============================================================================
+# LOAD AND SET SETTINGS FILE FOR SATPING
+# ------------------------------------
+
+
 # loads settings file into variables
 if [ ! -r "$settings_file" ]; then
     # if not existing or readable, create a new file
-    restoreSettings
+    initSettings
 else
     # if existing and readable, read its content
-    while IFS== read var values
-    do
+    while IFS== read var values; do
         IFS=, read -a $var <<< "$values"
     done < "$settings_file"
-    if [[ -z "$satping" ]]
-    then
+    
+    # ** satping - check availability of satping variable
+    if [[ -z "$satping" ]]; then
         [[ "$VERBOSE" == "true" ]] && echo "warning: settings: satping not found."
         satellite_notification=true  # do perform the satellite notification
-        updateSettingsSatellitePing  # set current date
+        updateSettings "${settings_satellite_key}" "${settings_satellite_timestamp}" # set current date
     fi
+    
     # compare, if dates are equal or not
     # if unequal, perform satellite notification, else not
     difference=$(($settings_satellite_timestamp-$satping))
@@ -217,7 +251,7 @@ else
     if [[ $difference -gt $SATPINGFREQ ]]
     then
         satellite_notification=true  # do perform the satellite notification
-        updateSettingsSatellitePing  # replace old date with current date
+        updateSettings "${settings_satellite_key}" "${settings_satellite_timestamp}" # replace old date with current date
     fi
     #if [[ $DEB -eq 1 ]]
     #then
@@ -422,6 +456,12 @@ else
     fi
 fi
 
+
+# =============================================================================
+# SELECT USAGE, ERROR COUNTERS AND ERROR MESSAGES
+# ------------------------------------
+
+
 # define audit variables, which are not used, in case there is no audit failure
 audit_success=0
 audit_failed_warn=0
@@ -434,15 +474,11 @@ audit_successrate=100%
 audit_difference=0
 
 
-# =============================================================================
-# SELECT USAGE, ERROR COUNTERS AND ERROR MESSAGES
-# ------------------------------------
-
 # select error messages in detail (partially extracted text log)
 [[ "$VERBOSE" == "true" ]] && INFO="$(echo "$LOG1H" 2>&1 | grep 'INFO')"
 AUDS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT' | grep 'failed')"
 FATS="$(echo "$LOG1H" 2>&1 | grep 'FATAL' | grep -v 'INFO')"
-ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'INFO' -e 'FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity')"
+ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'INFO' -e 'FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity' -e 'connection reset by peer')"
 DREPS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_REPAIR' | grep 'failed')"
 PREPS="$(echo "$LOG1H" 2>&1 | grep -E 'PUT_REPAIR' | grep 'failed')"
 
@@ -458,7 +494,7 @@ tmp_fatal_errors="$(echo "$FATS" 2>&1 | grep 'FATAL' -c)"
 tmp_audits_failed="$(echo "$AUDS" 2>&1 | grep -E 'GET_AUDIT' | grep 'failed' -c)"
 tmp_reps_failed=$(($(echo "$DREPS" 2>&1 | grep 'failed' -c)+$(echo "$PREPS" 2>&1 | grep 'failed' -c)))
 tmp_rest_of_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' -c)"
-tmp_io_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' | grep -e 'timeout' -c)"
+tmp_io_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' | grep -e 'timeout' -e 'connection reset' -c)"
 temp_severe_errors="$(echo "$SEVERE" 2>&1 | grep -i -e 'error:' -e 'fatal:' -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -e 'Unable to read the disk' -e 'software caused connection abort' -c)"
 
 [[ "$VERBOSE" == "true" ]] && echo " *** info count             : #$tmp_info"
@@ -686,6 +722,90 @@ fi
 [[ "$VERBOSE" == "true" ]] && echo " *** i/o timouts ignored    : $ignore_rest_of_errors"
 
 
+
+# =============================================================================
+# LOAD AND UPDATE SETTINGS FILE WITH ESTIMATED PAYOUTS PER STORJ NODE (SN)
+# ------------------------------------
+
+if [[ "$include_current_earnings" == "true" ]] ; then
+
+    if [ ! -r "$settings_file" ]; then
+        [[ "$VERBOSE" == "true" ]] && echo "warning: settings file could not be read; skipping payout estimation."
+        include_current_earnings=false;
+    else
+        while IFS='=' read -d $'\n' -r k v; do
+          # Skip lines starting with sharp or lines containing only space or empty lines
+          [[ "$k" =~ ^([[:space:]]*|[[:space:]]*#.*)$ ]] && continue
+          settings[$k]="$v"
+        done < "$settings_file"
+                
+        # initiate local variables 
+        tmp_payComplete=false
+        tmp_payValid=false
+        tmp_payDiff=0
+        tmp_timestamp=$(date --utc +'%s'); # current timestamp
+        tmp_todayDay=$(date --utc +"%d"); # TODO add support on MacOS
+    
+        # check availability of $NODE_payTimestamp variable
+        if [ -z settings["${NODE}_payTimestamp"] ]; then
+            [[ "$VERBOSE" == "true" ]] && echo "warning: settings: ${!NODE}_payTimestamp not found."
+            updateSettings "${NODE}_payTimestamp" "${tmp_timestamp}";
+            settings["${NODE}_payTimestamp"]=$tmp_timestamp;
+        fi
+    
+        # check availability of $NODE_payValue variable
+        if [ -z settings["${NODE}_payValue"] ]; then
+            [[ "$VERBOSE" == "true" ]] && echo "warning: settings: ${NODE}_payValue not found."
+            updateSettings "${NODE}_payValue" "0";
+            settings["${NODE}_payValue"]=0;
+        fi
+        
+        # check content of $NODE_payTimestamp variable
+        [[ -n settings["${NODE}_payTimestamp"] ]] && settings["${NODE}_payTimestamp"]=$tmp_timestamp;
+        # check availability of $NODE_payValue variable
+        [[ -n settings["${NODE}_payValue"] ]] && settings["${NODE}_payValue"]=0;
+        # if today = 1st of a month; then payValue = 0;
+        [[ $tmp_todayDay -eq 1 ]] && settings["${NODE}_payValue"]=0;
+        
+        # if payDate  = yesterday (or different than today); then payValid = true; else payValid = false;
+        # TODO add MacOS support for payDay check:
+            # DATE=20090801204150; date -jf "%Y%m%d%H%M%S" $DATE "+date \"%A,%_d %B %Y %H:%M:%S\""
+            # date -j -v-1d -f "%Y-%m-%d" "2011-09-01" "+%Y-%m-%d" ---> 2011-08-31
+        if [[ $(date --utc -d @"${settings['${NODE}_payTimestamp']}" +"%d") -ne $tmp_todayDay ]]; then 
+            tmp_payValid=true;
+            # if payDate timestamp between 23:45:00 and 23:59:59 (hh:mm:ss); then payComplete = true; else payComplete = false;
+            tmp_payDateHour=$(date --utc -d @"${settings['${NODE}_payTimestamp']}" "%H" ); # TODO add support on MacOS
+            tmp_payDateMinutes=$(date --utc -d @"${settings['${NODE}_payTimestamp']}" +"%M" ); # TODO add support on MacOS
+            [[ $tmp_payDateHour -eq 23 ]] && [[ $tmp_payDateMinutes -ge 45 ]] && [[ $tmp_payDateMinutes -le 59 ]] && tmp_payComplete=true;
+        fi
+        
+        # payValid; then do estimated payout calculation
+        if [[ "$tmp_payValid" == "true" ]]; then
+            # select payout data with jq from storage node API
+            tmp_estimated_payout_curl=$(curl -s "$node_url/api/sno/estimated-payout")
+            tmp_egressBandwidthPayout=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonth.egressBandwidthPayout'));
+            tmp_egressRepairAuditPayout=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonth.egressRepairAuditPayout'));
+            tmp_diskSpacePayout=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonth.diskSpacePayout'));
+            tmp_currentMonthExpectations=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonthExpectations'));
+            # sum up estimatedPayoutTotal for the current month in dollar-cents
+            tmp_estimatedPayoutTotal=$($tmp_egressBandwidthPayout+$tmp_egressRepairAuditPayout+$tmp_diskSpacePayout);
+            # ... calculate payDiff (=earnings for today) from estimatedPayoutTotal <minus> settings["${NODE}_payValue"]
+            tmp_payDiff=$(echo "$tmp_estimatedPayoutTotal - $(settings['${NODE}_payValue'])" | bc);
+            if [[ "$tmp_payComplete" == "true" ]]; then
+                # set payValue = estimatedPayoutTotal --> persistent storage !!
+                updateSettings "${NODE}_payValue" "$tmp_estimatedPayoutTotal";
+                # set payDate  = timestamp            --> persistent storage !!
+                updateSettings "${NODE}_payTimestamp" "$tmp_timestamp";
+            fi
+            
+        fi # // end of payout estimation if clause
+        
+    fi # // end of $settings_file readable if clause
+
+fi # // end of $include_current_earnings if clause
+
+
+
 # =============================================================================
 # CONCATENATE THE PUSH MESSAGE
 # ------------------------------------
@@ -695,6 +815,10 @@ DLOG=""
 
 if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]] && [[ $tmp_audits_failed -eq 0 ]] && [[ $temp_severe_errors -eq 0 ]] && [[ $tmp_reps_failed -eq 0 ]]; then 
 	DLOG="$DLOG [$NODE] : hdd $tmp_disk_gross > OK "
+    if [[ "$include_current_earnings" == "true" ]] ; then
+        DLOG="$DLOG $tmp_payDiff\$/$tmp_estimatedPayoutTotal\$";
+        [[ "$tmp_payComplete" == "false" ]] && DLOG="$DLOG (!)";
+    fi
 else
 	DLOG="**warning** [$NODE] : "
 fi
