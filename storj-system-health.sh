@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.8.0a
+# v1.8.0 b
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -50,7 +50,7 @@ General options:
   -l <int>.     Override LOGMIN specified in settings, format: minutes as integer
   -m            Debug mode: discord push + test settings by sending test mail
   -p <path>     Provide a path to support crontab on MacOS
-  -s <path>     Use individual fiel path for settings
+  -s <path>     Use individual file path for settings
   -v            Verbose option to enable console output while execution"
 
 # parameter handling
@@ -84,21 +84,6 @@ DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
 # DEFINE FUNCTIONS
 # ------------------------------------
 
-# function updateSettingsSatellitePing() {
-#     sed -i -e "s/$settings_satellite_key=.*/$settings_satellite_key=$settings_satellite_timestamp/g" "$settings_file"
-    # sed -i -e "s/$settings_satellite_key=$satping/$settings_satellite_key=$settings_satellite_timestamp/g" "$settings_file"
-#     [[ "$VERBOSE" == "true" ]] && echo " *** settings: latest satellite ping saved [$(date +'%d.%m.%Y %H:%M')]."
-# }
-
-# function updateSettingsAddMissingFields() {
-    # adds a list of new keys into the settings file
-    # for keyToAdd in "$@"
-    # do
-    #     echo "$keyToAdd=" >> $settings_file
-    #     [[ "$VERBOSE" == "true" ]] && echo " *** settings: $keyToAdd key added."
-    # done
-# }
-
 function updateSettings() {
     k="${1}" # key passed
     v="${2}" # value passed
@@ -108,7 +93,7 @@ function updateSettings() {
         [[ "$VERBOSE" == "true" ]] && echo " *** settings: added key '${k}', because it was not found."
     else
         sed -ir "s/^[#]*\s*${k}=.*/$k=$v/" $settings_file
-        [[ "$VERBOSE" == "true" ]] && echo " *** settings: replacing value of key '${k}' with value '${v}'."
+        [[ "$VERBOSE" == "true" ]] && echo " *** settings: new value '${v}' for '${k}' saved."
     fi
 }
 
@@ -214,10 +199,11 @@ else
     [[ ${#NODEURLS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and NODEURLS do not match in .credo" && exit 2
     [[ ${#NODELOGPATHS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and NODELOGPATHS do not match in .credo" && exit 2
 
-    [[ "$VERBOSE" == "true" ]] && echo " *** config file loaded"
+    [[ "$VERBOSE" == "true" ]] && echo " *** config file loaded: $config_file"
 fi
 
-[[ "$VERBOSE" == "true" ]] && [[ $LOGMIN_OVERRIDE -gt 0 ]] && echo " *** settings: logs from the last $LOGMIN_OVERRIDE minutes will be selected"
+[[ "$VERBOSE" == "true" ]] && echo " *** settings file path: $settings_file"
+[[ "$VERBOSE" == "true" ]] && [[ $LOGMIN_OVERRIDE -gt 0 ]] && echo " *** settings: logs from the last $LOGMIN_OVERRIDE minutes will be selected."
 
 
 # =============================================================================
@@ -738,32 +724,53 @@ if [[ "$include_current_earnings" == "true" ]] ; then
           [[ "$k" =~ ^([[:space:]]*|[[:space:]]*#.*)$ ]] && continue
           settings[$k]="$v"
         done < "$settings_file"
+        
+        [[ "$VERBOSE" == "true" ]] && echo "... settings read: ($(typeset -p settings))."
                 
         # initiate local variables 
         tmp_payComplete=false
         tmp_payValid=false
         tmp_payDiff=0
-        tmp_timestamp=$(date --utc +'%s'); # current timestamp
-        tmp_todayDay=$(date --utc +"%d"); # TODO add support on MacOS
+        tmp_timestamp=$(date --utc +"%s"); # current timestamp
+        tmp_todayDay=$(date --utc +"%d");  # TODO add support on MacOS
+        
+        [[ "$VERBOSE" == "true" ]] && echo "... settings : local variables initiated."
     
         # check availability of $NODE_payTimestamp variable
-        if [ -z settings["${NODE}_payTimestamp"] ]; then
+        if [[ ${settings["${NODE}_payTimestamp"]+Y} ]]; then
+            if [[ ${settings["${NODE}_payTimestamp"]} ]]; then
+                # ... not empty, great!
+                [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payTimestamp found."
+            else
+                [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payTimestamp found, but empty."
+                updateSettings "${NODE}_payTimestamp" "${tmp_timestamp}";
+                settings["${NODE}_payTimestamp"]=$tmp_timestamp;
+            fi
+        else 
             [[ "$VERBOSE" == "true" ]] && echo "warning: settings: ${!NODE}_payTimestamp not found."
             updateSettings "${NODE}_payTimestamp" "${tmp_timestamp}";
             settings["${NODE}_payTimestamp"]=$tmp_timestamp;
         fi
     
         # check availability of $NODE_payValue variable
-        if [ -z settings["${NODE}_payValue"] ]; then
-            [[ "$VERBOSE" == "true" ]] && echo "warning: settings: ${NODE}_payValue not found."
+        if [[ ${settings["${NODE}_payValue"]+Y} ]]; then
+            if [[ ${settings["${NODE}_payValue"]} ]]; then
+                # ... not empty, great!
+                [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payValue found."
+            else
+                [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payValue found, but empty."
+                updateSettings "${NODE}_payValue" "0";
+                settings["${NODE}_payValue"]=0;
+            fi
+        else 
+            [[ "$VERBOSE" == "true" ]] && echo "warning: settings: ${!NODE}_payValue not found."
             updateSettings "${NODE}_payValue" "0";
             settings["${NODE}_payValue"]=0;
         fi
         
-        # check content of $NODE_payTimestamp variable
-        [[ -n settings["${NODE}_payTimestamp"] ]] && settings["${NODE}_payTimestamp"]=$tmp_timestamp;
-        # check availability of $NODE_payValue variable
-        [[ -n settings["${NODE}_payValue"] ]] && settings["${NODE}_payValue"]=0;
+        [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payTimestamp=${settings[${NODE}_payTimestamp]}"
+        [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payValue=${settings[${NODE}_payValue]}"
+        
         # if today = 1st of a month; then payValue = 0;
         [[ $tmp_todayDay -eq 1 ]] && settings["${NODE}_payValue"]=0;
         
@@ -771,26 +778,39 @@ if [[ "$include_current_earnings" == "true" ]] ; then
         # TODO add MacOS support for payDay check:
             # DATE=20090801204150; date -jf "%Y%m%d%H%M%S" $DATE "+date \"%A,%_d %B %Y %H:%M:%S\""
             # date -j -v-1d -f "%Y-%m-%d" "2011-09-01" "+%Y-%m-%d" ---> 2011-08-31
-        if [[ $(date --utc -d @"${settings['${NODE}_payTimestamp']}" +"%d") -ne $tmp_todayDay ]]; then 
+        tmp_payTimestampDay=$(date --utc -d @"${settings[${NODE}_payTimestamp]}" +"%d");
+        [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payTimestampDay=$tmp_payTimestampDay"
+        if [[ $tmp_payTimestampDay -ne $tmp_todayDay ]]; then 
             tmp_payValid=true;
+            [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payValid=$tmp_payValid"
             # if payDate timestamp between 23:45:00 and 23:59:59 (hh:mm:ss); then payComplete = true; else payComplete = false;
-            tmp_payDateHour=$(date --utc -d @"${settings['${NODE}_payTimestamp']}" "%H" ); # TODO add support on MacOS
-            tmp_payDateMinutes=$(date --utc -d @"${settings['${NODE}_payTimestamp']}" +"%M" ); # TODO add support on MacOS
+            tmp_payDateHour=$(date --utc -d @"${settings[${NODE}_payTimestamp]}" +"%H" ); # TODO add support on MacOS
+            [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payDateHour=$tmp_payDateHour"
+            tmp_payDateMinutes=$(date --utc -d @"${settings[${NODE}_payTimestamp]}" +"%M" ); # TODO add support on MacOS
+            [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payDateMinutes=$tmp_payDateMinutes"
             [[ $tmp_payDateHour -eq 23 ]] && [[ $tmp_payDateMinutes -ge 45 ]] && [[ $tmp_payDateMinutes -le 59 ]] && tmp_payComplete=true;
+            [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payComplete=$tmp_payComplete"
         fi
         
-        # payValid; then do estimated payout calculation
+        # select payout data with jq from storage node API
+        tmp_estimated_payout_curl=$(curl -s "$node_url/api/sno/estimated-payout")
+        tmp_egressBandwidthPayout=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonth.egressBandwidthPayout'));
+        [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_egressBandwidthPayout=$tmp_egressBandwidthPayout"
+        tmp_egressRepairAuditPayout=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonth.egressRepairAuditPayout'));
+        [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_egressRepairAuditPayout=$tmp_egressRepairAuditPayout"
+        tmp_diskSpacePayout=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonth.diskSpacePayout'));
+        [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_diskSpacePayout=$tmp_diskSpacePayout"
+        tmp_currentMonthExpectations=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonthExpectations'));
+        [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_currentMonthExpectations=$tmp_currentMonthExpectations"
+        # sum up estimatedPayoutTotal for the current month in dollar-cents
+        tmp_estimatedPayoutTotal=$(echo "$tmp_egressBandwidthPayout + $tmp_egressRepairAuditPayout + $tmp_diskSpacePayout" | bc);
+        [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_estimatedPayoutTotal calculated: $tmp_estimatedPayoutTotal"
+        # ... calculate payDiff (=earnings for today) from estimatedPayoutTotal <minus> settings["${NODE}_payValue"]
+        tmp_payDiff=$(echo "$tmp_estimatedPayoutTotal - ${settings[${NODE}_payValue]}" | bc);
+        [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payDiff=$tmp_payDiff"
+        
+        # payValid; then do estimated payout circulation
         if [[ "$tmp_payValid" == "true" ]]; then
-            # select payout data with jq from storage node API
-            tmp_estimated_payout_curl=$(curl -s "$node_url/api/sno/estimated-payout")
-            tmp_egressBandwidthPayout=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonth.egressBandwidthPayout'));
-            tmp_egressRepairAuditPayout=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonth.egressRepairAuditPayout'));
-            tmp_diskSpacePayout=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonth.diskSpacePayout'));
-            tmp_currentMonthExpectations=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonthExpectations'));
-            # sum up estimatedPayoutTotal for the current month in dollar-cents
-            tmp_estimatedPayoutTotal=$($tmp_egressBandwidthPayout+$tmp_egressRepairAuditPayout+$tmp_diskSpacePayout);
-            # ... calculate payDiff (=earnings for today) from estimatedPayoutTotal <minus> settings["${NODE}_payValue"]
-            tmp_payDiff=$(echo "$tmp_estimatedPayoutTotal - $(settings['${NODE}_payValue'])" | bc);
             if [[ "$tmp_payComplete" == "true" ]]; then
                 # set payValue = estimatedPayoutTotal --> persistent storage !!
                 updateSettings "${NODE}_payValue" "$tmp_estimatedPayoutTotal";
