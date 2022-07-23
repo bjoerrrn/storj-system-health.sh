@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.8.0 b
+# v1.8.0 c
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -836,7 +836,9 @@ DLOG=""
 if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]] && [[ $tmp_audits_failed -eq 0 ]] && [[ $temp_severe_errors -eq 0 ]] && [[ $tmp_reps_failed -eq 0 ]]; then 
 	DLOG="$DLOG [$NODE] : hdd $tmp_disk_gross > OK "
     if [[ "$include_current_earnings" == "true" ]] ; then
-        DLOG="$DLOG $tmp_payDiff\$/$tmp_estimatedPayoutTotal\$";
+        tmp_estimatedPayoutTotalString=$(printf '%.2f\n' $(echo -e "$tmp_payDiff" | awk '{print ( $1 * 1 ) / 100}'))\$
+        tmp_estimatedPayoutTodayString=$(printf '%.2f\n' $(echo -e "$tmp_estimatedPayoutTotal" | awk '{print ( $1 * 1 ) / 100}'))\$
+        DLOG="$DLOG $tmp_estimatedPayoutTotalString/$tmp_estimatedPayoutTodayString";
         [[ "$tmp_payComplete" == "false" ]] && DLOG="$DLOG (!)";
     fi
 else
