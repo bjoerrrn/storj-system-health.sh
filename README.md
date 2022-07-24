@@ -18,9 +18,11 @@ this linux/macos shell script checks, if a [storj node][storagenode] (from the [
 * reports: 📰
   * disk usage
   * success rates audits, downloads, uploads, repair up-/downloads
+  * estimated payouts for today and current month
+  * todays upload and download statistics
 * optimized for crontab and command line usage 💻
 * supports redirected logs [to a file][log_redirect]
-* only requires [curl][curl], [jq][jq] and (optionally) [swaks][swaks] to run 🔥 
+* only requires [curl][curl], [jq][jq], [bc][bc] and (optionally) [swaks][swaks] to run 🔥 
 
 ## optimzed / tested for
 - debian bullseye 🐧
@@ -92,7 +94,7 @@ NODELOGPATHS=/          # put your relative path + log file name here,
 ## log selection specifica - in alignment with cronjob settings
 LOGMIN=60               # latest log horizon to have a detailled view on, in minutes
                         # -> change this, if your cronjob runs more often than 60m
-LOGMAX=1440             # larger log horizon for overall statistics, in minutes
+LOGMAX=720              # larger log horizon for overall statistics, in minutes
 ```
 
 make sure, your script is executable by running the following command. add 'sudo' at the beginning, if admin privileges are required. 
@@ -119,6 +121,12 @@ optionally you can pass another path to `*.credo`, in case it has another name o
 ./storj-system-health.sh -c /home/pi/anothername.credo
 ```
 
+in order to use the estimated payout information, which looks like so:
+```
+message:  [sn1] : hdd 38.62% > OK 0.25$ / 11.77$
+```
+... you should set your crontab to be run around 23:55 UTC. You need to adjust the timing, if you have a couple of nodes and/or huge log files to be analysed: the script needs to be finished before the next full hour, ideally latest 23:59:59 UTC.
+
 it also supports a help command for further details:
 
 ```
@@ -139,8 +147,12 @@ for macos please be aware of the following specifics:
 ```
 SHELL=/bin/sh
 PATH="/opt/homebrew/opt/sqlite/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-35,55 *    *  *  *  /Users/me/checks.sh -v >> /Users/me/Desktop/checks.txt 2>&1
-15    */3  *  *  *  /Users/me/checks.sh -d -c /Users/me/my.credo >> /Users/me/Desktop/checks.txt 2>&1
+# UNIX:
+58 *    * * *   pi      cd /home/pi/scripts/ && ./checks.sh -ev
+10 7,19 * * *   pi      cd /home/pi/scripts/ && ./checks.sh -ed
+# MACOS
+# 58    *     *  *  *  /Users/me/checks.sh -ev >> /Users/me/Desktop/checks.txt 2>&1
+# 10    7,19  *  *  *  /Users/me/checks.sh -ed -c /Users/me/my.credo >> /Users/me/Desktop/checks.txt 2>&1
 ```
 
 ## example screenshots
