@@ -121,6 +121,12 @@ optionally you can pass another path to `*.credo`, in case it has another name o
 ./storj-system-health.sh -c /home/pi/anothername.credo
 ```
 
+in order to use the estimated payout information, which looks like so:
+```
+message:  [sn1] : hdd 38.62% > OK 0.25$ / 11.77$
+```
+... you should set your crontab to be run around 23:55 UTC. You need to adjust the timing, if you have a couple of nodes and/or huge log files to be analysed: the script needs to be finished before the next full hour, ideally latest 23:59:59 UTC.
+
 it also supports a help command for further details:
 
 ```
@@ -145,8 +151,8 @@ PATH="/opt/homebrew/opt/sqlite/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/loc
 58 *    * * *   pi      cd /home/pi/scripts/ && ./checks.sh -ev
 10 7,19 * * *   pi      cd /home/pi/scripts/ && ./checks.sh -ed
 # MACOS
-# 35,55 *    *  *  *  /Users/me/checks.sh -v >> /Users/me/Desktop/checks.txt 2>&1
-# 15    */3  *  *  *  /Users/me/checks.sh -d -c /Users/me/my.credo >> /Users/me/Desktop/checks.txt 2>&1
+# 58    *     *  *  *  /Users/me/checks.sh -ev >> /Users/me/Desktop/checks.txt 2>&1
+# 10    7,19  *  *  *  /Users/me/checks.sh -ed -c /Users/me/my.credo >> /Users/me/Desktop/checks.txt 2>&1
 ```
 
 ## example screenshots
