@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.8.0
+# v1.8.1
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -734,14 +734,14 @@ if [[ "$include_current_earnings" == "true" ]] ; then
         
         if [[ "$UNAMEOUT" == "Darwin" ]] ; then
             tmp_timestamp=$(date -ju +"%s"); 
-            tmp_todayDay=$(date -ju +"%d"); 
-            tmp_todayHour=$(date -ju +"%H"); 
-            tmp_todayMinutes=$(date -ju +"%M"); 
+            tmp_todayDay=$(date -ju +"%-d"); 
+            tmp_todayHour=$(date -ju +"%-H"); 
+            tmp_todayMinutes=$(date -ju +"%-M"); 
         else
             tmp_timestamp=$(date --utc +"%s");
-            tmp_todayDay=$(date --utc +"%d");
-            tmp_todayHour=$(date --utc +"%H"); 
-            tmp_todayMinutes=$(date --utc +"%M" ); 
+            tmp_todayDay=$(date --utc +"%-d");
+            tmp_todayHour=$(date --utc +"%-H"); 
+            tmp_todayMinutes=$(date --utc +"%-M" ); 
         fi
         
         # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_todayDay=$tmp_todayDay";
@@ -792,13 +792,13 @@ if [[ "$include_current_earnings" == "true" ]] ; then
         # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payTimestamp=$tmp_payTimestamp";
                     
         if [[ "$UNAMEOUT" == "Darwin" ]] ; then
-            tmp_payDateDay=$(date -juf "%s" $tmp_payTimestamp +"%d");
-            tmp_payDateHour=$(date -juf "%s" $tmp_payTimestamp +"%H");
-            tmp_payDateMinutes=$(date -juf "%s" $tmp_payTimestamp +"%M");
+            tmp_payDateDay=$(date -juf "%s" $tmp_payTimestamp +"%-d");
+            tmp_payDateHour=$(date -juf "%s" $tmp_payTimestamp +"%-H");
+            tmp_payDateMinutes=$(date -juf "%s" $tmp_payTimestamp +"%-M");
         else
-            tmp_payDateDay=$(date --utc -d @"${settings[${NODE}_payTimestamp]}" +"%d");
-            tmp_payDateHour=$(date --utc -d @"${settings[${NODE}_payTimestamp]}" +"%H" ); 
-            tmp_payDateMinutes=$(date --utc -d @"${settings[${NODE}_payTimestamp]}" +"%M" ); 
+            tmp_payDateDay=$(date --utc -d @"${settings[${NODE}_payTimestamp]}" +"%-d");
+            tmp_payDateHour=$(date --utc -d @"${settings[${NODE}_payTimestamp]}" +"%-H" ); 
+            tmp_payDateMinutes=$(date --utc -d @"${settings[${NODE}_payTimestamp]}" +"%-M" ); 
         fi
 
         # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payDateDay=$tmp_payDateDay"
