@@ -753,6 +753,7 @@ if [[ "$include_current_earnings" == "true" ]] ; then
             if [[ ${settings["${NODE}_payTimestamp"]} ]]; then
                 # ... not empty, great!
                 # [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payTimestamp found."
+                :
             else
                 # [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payTimestamp found, but empty."
                 updateSettings "${NODE}_payTimestamp" "${tmp_timestamp}";
@@ -769,6 +770,7 @@ if [[ "$include_current_earnings" == "true" ]] ; then
             if [[ ${settings["${NODE}_payValue"]} ]]; then
                 # ... not empty, great!
                 # [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payValue found."
+                :
             else
                 # [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payValue found, but empty."
                 updateSettings "${NODE}_payValue" "0";
