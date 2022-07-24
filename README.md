@@ -94,7 +94,7 @@ NODELOGPATHS=/          # put your relative path + log file name here,
 ## log selection specifica - in alignment with cronjob settings
 LOGMIN=60               # latest log horizon to have a detailled view on, in minutes
                         # -> change this, if your cronjob runs more often than 60m
-LOGMAX=1440             # larger log horizon for overall statistics, in minutes
+LOGMAX=720              # larger log horizon for overall statistics, in minutes
 ```
 
 make sure, your script is executable by running the following command. add 'sudo' at the beginning, if admin privileges are required. 
@@ -141,8 +141,12 @@ for macos please be aware of the following specifics:
 ```
 SHELL=/bin/sh
 PATH="/opt/homebrew/opt/sqlite/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-35,55 *    *  *  *  /Users/me/checks.sh -v >> /Users/me/Desktop/checks.txt 2>&1
-15    */3  *  *  *  /Users/me/checks.sh -d -c /Users/me/my.credo >> /Users/me/Desktop/checks.txt 2>&1
+# UNIX:
+58 *    * * *   pi      cd /home/pi/scripts/ && ./checks.sh -ev
+10 7,19 * * *   pi      cd /home/pi/scripts/ && ./checks.sh -ed
+# MACOS
+# 35,55 *    *  *  *  /Users/me/checks.sh -v >> /Users/me/Desktop/checks.txt 2>&1
+# 15    */3  *  *  *  /Users/me/checks.sh -d -c /Users/me/my.credo >> /Users/me/Desktop/checks.txt 2>&1
 ```
 
 ## example screenshots
