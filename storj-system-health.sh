@@ -849,11 +849,11 @@ fi
 DLOG=""
 
 if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]] && [[ $tmp_audits_failed -eq 0 ]] && [[ $temp_severe_errors -eq 0 ]] && [[ $tmp_reps_failed -eq 0 ]]; then 
-	DLOG="$DLOG [$NODE] : hdd $tmp_disk_gross |"
+	DLOG="$DLOG [$NODE] : hdd $tmp_disk_gross"
     if [[ "$include_current_earnings" == "true" ]] ; then
         tmp_estimatedPayoutTotalString=$(printf '%.2f\n' $(echo -e "$tmp_payDiff" | awk '{print ( $1 * 1 ) / 100}'))\$
         tmp_estimatedPayoutTodayString=$(printf '%.2f\n' $(echo -e "$tmp_estimatedPayoutTotal" | awk '{print ( $1 * 1 ) / 100}'))\$
-        DLOG="$DLOG d: $tmp_estimatedPayoutTotalString | m: $tmp_estimatedPayoutTodayString";
+        DLOG="$DLOG | d: $tmp_estimatedPayoutTotalString | m: $tmp_estimatedPayoutTodayString";
         [[ "$tmp_payComplete" == "false" ]] && DLOG="$DLOG (!)";
     fi
 else
