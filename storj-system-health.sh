@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.8.0 c
+# v1.8.0 d
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -533,7 +533,7 @@ then
     fi
 fi
 
-[[ "$VERBOSE" == "true" ]] && echo " *** audits                 : warn: $audit_recfailrate, crit: $audit_failrate, s: $audit_successrate"
+[[ "$VERBOSE" == "true" ]] && echo " *** audits                 : w: $audit_recfailrate, c: $audit_failrate, s: $audit_successrate"
 if [[ "$VERBOSE" == "true" ]] && [[ $audit_difference -gt 0 ]]; then
                               echo "warning:                      -> there are audits pending and not finished ($audit_difference)"
 fi
@@ -788,7 +788,7 @@ if [[ "$include_current_earnings" == "true" ]] ; then
             [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payDateHour=$tmp_payDateHour"
             tmp_payDateMinutes=$(date --utc -d @"${settings[${NODE}_payTimestamp]}" +"%M" ); # TODO add support on MacOS
             [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payDateMinutes=$tmp_payDateMinutes"
-            [[ $tmp_payDateHour -eq 23 ]] && [[ $tmp_payDateMinutes -ge 45 ]] && [[ $tmp_payDateMinutes -le 59 ]] && tmp_payComplete=true;
+            [[ $tmp_payDateHour -eq 23 ]] && [[ $tmp_payDateMinutes -ge 50 ]] && [[ $tmp_payDateMinutes -le 59 ]] && tmp_payComplete=true;
             [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payComplete=$tmp_payComplete"
         fi
         
@@ -809,19 +809,21 @@ if [[ "$include_current_earnings" == "true" ]] ; then
         tmp_payDiff=$(echo "$tmp_estimatedPayoutTotal - ${settings[${NODE}_payValue]}" | bc);
         [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payDiff=$tmp_payDiff"
         
-        # payValid; then do estimated payout circulation
-        if [[ "$tmp_payValid" == "true" ]]; then
-            if [[ "$tmp_payComplete" == "true" ]]; then
+        # pay data and last timestamp valid and current timestamp at the end of the current day, then store new values
+        if [[ "$tmp_payValid" == "true" &&  "$tmp_payComplete" == "true" ]]; then
+            tmp_todayHour=$(date --utc +"%H"); # TODO add support on MacOS
+            [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_todayHour=$tmp_todayHour"
+            tmp_todayMinutes=$(date --utc +"%M" ); # TODO add support on MacOS
+            [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_todayMinutes=$tmp_todayMinutes"
+            if [[ $tmp_todayHour -eq 23 && $tmp_todayMinutes -ge 50 && $tmp_todayMinutes -le 59 ]]; then
                 # set payValue = estimatedPayoutTotal --> persistent storage !!
                 updateSettings "${NODE}_payValue" "$tmp_estimatedPayoutTotal";
                 # set payDate  = timestamp            --> persistent storage !!
                 updateSettings "${NODE}_payTimestamp" "$tmp_timestamp";
-            fi
+            fi # // end of store new values if clause
             
         fi # // end of payout estimation if clause
-        
     fi # // end of $settings_file readable if clause
-
 fi # // end of $include_current_earnings if clause
 
 
@@ -834,11 +836,11 @@ fi # // end of $include_current_earnings if clause
 DLOG=""
 
 if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]] && [[ $tmp_audits_failed -eq 0 ]] && [[ $temp_severe_errors -eq 0 ]] && [[ $tmp_reps_failed -eq 0 ]]; then 
-	DLOG="$DLOG [$NODE] : hdd $tmp_disk_gross > OK "
+	DLOG="$DLOG [$NODE] : hdd $tmp_disk_gross > OK"
     if [[ "$include_current_earnings" == "true" ]] ; then
         tmp_estimatedPayoutTotalString=$(printf '%.2f\n' $(echo -e "$tmp_payDiff" | awk '{print ( $1 * 1 ) / 100}'))\$
         tmp_estimatedPayoutTodayString=$(printf '%.2f\n' $(echo -e "$tmp_estimatedPayoutTotal" | awk '{print ( $1 * 1 ) / 100}'))\$
-        DLOG="$DLOG $tmp_estimatedPayoutTotalString/$tmp_estimatedPayoutTodayString";
+        DLOG="$DLOG $tmp_estimatedPayoutTotalString / $tmp_estimatedPayoutTodayString";
         [[ "$tmp_payComplete" == "false" ]] && DLOG="$DLOG (!)";
     fi
 else
