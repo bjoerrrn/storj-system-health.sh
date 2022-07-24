@@ -24,7 +24,10 @@ config_file="./storj-system-health.credo"      # config file path
 settings_file=".storj-system-health"           # settings file path
 declare -A settings                            # declare associative array settings
 
-DEB=0                                          # debug mode flag
+DEBUG=false                                    # debug mode flag
+SENDPUSH=false                                 # sends push message, when true
+SENDMAIL=false                                 # sends test mail, when true
+DETAILEDSUCCESSRATES=false                     # send detailed success rates in push message
 VERBOSE=false                                  # verbose mode flag
 LOGMIN_OVERRIDE=0                              # LOGMIN override flag 
 UNAMEOUT="$(uname -s)"                         # get OS name (darwin for mac os, linux etc.)
@@ -45,27 +48,31 @@ Example: $0 -dv
 General options:
   -h            Display this help and exit
   -c <path>     Use individual file path for properties
-  -d            Debug mode: send discord push if health check ok
+  -d            send discord push 
   -e            Show current month's earnings
   -l <int>.     Override LOGMIN specified in settings, format: minutes as integer
-  -m            Debug mode: discord push + test settings by sending test mail
+  -m            send test mail in order to test mail server settings
   -p <path>     Provide a path to support crontab on MacOS
   -s <path>     Use individual file path for settings
-  -v            Verbose option to enable console output while execution"
+  -o            Send detailed success rates in push message; do NOT trim the result
+  -v            Verbose option to enable console output while execution
+  -q            Debug mode with extra quality check outputs"
 
 # parameter handling
 
-while getopts ":hc:s:dmp:l:ve" flag
+while getopts ":hc:s:dmp:l:veqo" flag
 do
     case "${flag}" in
         c) config_file=${OPTARG};;
         s) settings_file=${OPTARG};;
-        d) DEB=1;;
-        m) DEB=2;;
+        d) SENDPUSH=true;;
+        m) SENDMAIL=true;;
         p) PATH=${OPTARG};;
         l) LOGMIN_OVERRIDE=${OPTARG};;
         v) VERBOSE=true;;
         e) include_current_earnings=true;;
+        q) DEBUG=true;;
+        o) DETAILEDSUCCESSRATES=true;;
         h | *) echo "$help_text" && exit 0;;
     esac
 done
@@ -76,8 +83,8 @@ DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
 
 [[ "$VERBOSE" == "true" ]] && echo "==="
 [[ "$VERBOSE" == "true" ]] && echo -e " *** timestamp [$(date +'%d.%m.%Y %H:%M')]"
-[[ "$VERBOSE" == "true" ]] && [[ $DEB -eq 1 ]] && echo -e " *** discord debug mode on"
-[[ "$VERBOSE" == "true" ]] && [[ $DEB -eq 2 ]] && echo -e " *** mail debug mode on"
+[[ "$VERBOSE" == "true" ]] && [[ "$SENDPUSH" == "true" ]] && echo -e " *** discord mode on"
+[[ "$VERBOSE" == "true" ]] && [[ "$SENDMAIL" == "true" ]] && echo -e " *** mail debug mode on"
 
 
 # =============================================================================
@@ -231,18 +238,11 @@ else
     # compare, if dates are equal or not
     # if unequal, perform satellite notification, else not
     difference=$(($settings_satellite_timestamp-$satping))
-    #echo "current: $settings_satellite_timestamp"
-    #echo "satping: $satping"
-    #echo "difference: $difference"
     if [[ $difference -gt $SATPINGFREQ ]]
     then
         satellite_notification=true  # do perform the satellite notification
         updateSettings "${settings_satellite_key}" "${settings_satellite_timestamp}" # replace old date with current date
     fi
-    #if [[ $DEB -eq 1 ]]
-    #then
-    #    satellite_notification=true  # do perform the satellite notification anyway when flag -d
-    #fi
     [[ "$VERBOSE" == "true" ]] && echo " *** settings: satellite pings will be sent: $satellite_notification"
 fi 
 
@@ -725,7 +725,7 @@ if [[ "$include_current_earnings" == "true" ]] ; then
           settings[$k]="$v"
         done < "$settings_file"
         
-        [[ "$VERBOSE" == "true" ]] && echo "... settings read: ($(typeset -p settings))."
+        [[ "$DEBUG" == "true" ]] && echo "... settings read: ($(typeset -p settings))."
                 
         # initiate local variables 
         tmp_payComplete=false
@@ -744,23 +744,22 @@ if [[ "$include_current_earnings" == "true" ]] ; then
             tmp_todayMinutes=$(date --utc +"%-M" ); 
         fi
         
-        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_todayDay=$tmp_todayDay";
-        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_todayHour=$tmp_todayHour";
-        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_todayMinutes=$tmp_todayMinutes";
+        [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_todayDay=$tmp_todayDay";
+        [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_todayHour=$tmp_todayHour";
+        [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_todayMinutes=$tmp_todayMinutes";
     
         # check availability of $NODE_payTimestamp variable
         if [[ ${settings["${NODE}_payTimestamp"]+Y} ]]; then
             if [[ ${settings["${NODE}_payTimestamp"]} ]]; then
                 # ... not empty, great!
-                # [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payTimestamp found."
-                :
+                [[ "$DEBUG" == "true" ]] && echo "... settings : ${NODE}_payTimestamp found."
             else
-                # [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payTimestamp found, but empty."
+                [[ "$DEBUG" == "true" ]] && echo "... settings : ${NODE}_payTimestamp found, but empty."
                 updateSettings "${NODE}_payTimestamp" "${tmp_timestamp}";
                 settings["${NODE}_payTimestamp"]=$tmp_timestamp;
             fi
         else 
-            # [[ "$VERBOSE" == "true" ]] && echo "warning: settings: ${!NODE}_payTimestamp not found."
+            [[ "$DEBUG" == "true" ]] && echo "warning: settings: ${!NODE}_payTimestamp not found."
             updateSettings "${NODE}_payTimestamp" "${tmp_timestamp}";
             settings["${NODE}_payTimestamp"]=$tmp_timestamp;
         fi
@@ -769,27 +768,27 @@ if [[ "$include_current_earnings" == "true" ]] ; then
         if [[ ${settings["${NODE}_payValue"]+Y} ]]; then
             if [[ ${settings["${NODE}_payValue"]} ]]; then
                 # ... not empty, great!
-                # [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payValue found."
+                [[ "$DEBUG" == "true" ]] && echo "... settings : ${NODE}_payValue found."
                 :
             else
-                # [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payValue found, but empty."
+                [[ "$DEBUG" == "true" ]] && echo "... settings : ${NODE}_payValue found, but empty."
                 updateSettings "${NODE}_payValue" "0";
                 settings["${NODE}_payValue"]=0;
             fi
         else 
-            # [[ "$VERBOSE" == "true" ]] && echo "warning: settings: ${!NODE}_payValue not found."
+            [[ "$DEBUG" == "true" ]] && echo "warning: settings: ${!NODE}_payValue not found."
             updateSettings "${NODE}_payValue" "0";
             settings["${NODE}_payValue"]=0;
         fi
         
-        # [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payTimestamp=${settings[${NODE}_payTimestamp]}"
-        # [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payValue=${settings[${NODE}_payValue]}"
+        [[ "$DEBUG" == "true" ]] && echo "... settings : ${NODE}_payTimestamp=${settings[${NODE}_payTimestamp]}"
+        [[ "$DEBUG" == "true" ]] && echo "... settings : ${NODE}_payValue=${settings[${NODE}_payValue]}"
         
         # if today = 1st of a month; then payValue = 0;
         [[ $tmp_todayDay -eq 1 ]] && settings["${NODE}_payValue"]=0;
         
         tmp_payTimestamp="${settings[${NODE}_payTimestamp]}"
-        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payTimestamp=$tmp_payTimestamp";
+        [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_payTimestamp=$tmp_payTimestamp";
                     
         if [[ "$UNAMEOUT" == "Darwin" ]] ; then
             tmp_payDateDay=$(date -juf "%s" $tmp_payTimestamp +"%-d");
@@ -801,35 +800,35 @@ if [[ "$include_current_earnings" == "true" ]] ; then
             tmp_payDateMinutes=$(date --utc -d @"${settings[${NODE}_payTimestamp]}" +"%-M" ); 
         fi
 
-        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payDateDay=$tmp_payDateDay"
-        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payDateHour=$tmp_payDateHour"
-        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payDateMinutes=$tmp_payDateMinutes"
+        [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_payDateDay=$tmp_payDateDay"
+        [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_payDateHour=$tmp_payDateHour"
+        [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_payDateMinutes=$tmp_payDateMinutes"
         
         # if payDate  = yesterday (or different than today); then payValid = true; else payValid = false;
         if [[ $tmp_payDateDay -ne $tmp_todayDay ]]; then 
             tmp_payValid=true;
-            # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payValid=$tmp_payValid"
+            [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_payValid=$tmp_payValid"
             # if payDate timestamp between 23:45:00 and 23:59:59 (hh:mm:ss); then payComplete = true; else payComplete = false;
             [[ $tmp_payDateHour -eq 23 ]] && [[ $tmp_payDateMinutes -ge 50 ]] && [[ $tmp_payDateMinutes -le 59 ]] && tmp_payComplete=true;
-            # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payComplete=$tmp_payComplete"
+            [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_payComplete=$tmp_payComplete"
         fi
         
         # select payout data with jq from storage node API
         tmp_estimated_payout_curl=$(curl -s "$node_url/api/sno/estimated-payout")
         tmp_egressBandwidthPayout=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonth.egressBandwidthPayout'));
-        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_egressBandwidthPayout=$tmp_egressBandwidthPayout"
+        [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_egressBandwidthPayout=$tmp_egressBandwidthPayout"
         tmp_egressRepairAuditPayout=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonth.egressRepairAuditPayout'));
-        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_egressRepairAuditPayout=$tmp_egressRepairAuditPayout"
+        [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_egressRepairAuditPayout=$tmp_egressRepairAuditPayout"
         tmp_diskSpacePayout=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonth.diskSpacePayout'));
-        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_diskSpacePayout=$tmp_diskSpacePayout"
+        [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_diskSpacePayout=$tmp_diskSpacePayout"
         tmp_currentMonthExpectations=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonthExpectations'));
-        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_currentMonthExpectations=$tmp_currentMonthExpectations"
+        [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_currentMonthExpectations=$tmp_currentMonthExpectations"
         # sum up estimatedPayoutTotal for the current month in dollar-cents
         tmp_estimatedPayoutTotal=$(echo "$tmp_egressBandwidthPayout + $tmp_egressRepairAuditPayout + $tmp_diskSpacePayout" | bc);
-        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_estimatedPayoutTotal calculated: $tmp_estimatedPayoutTotal"
+        [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_estimatedPayoutTotal calculated: $tmp_estimatedPayoutTotal"
         # ... calculate payDiff (=earnings for today) from estimatedPayoutTotal <minus> settings["${NODE}_payValue"]
         tmp_payDiff=$(echo "$tmp_estimatedPayoutTotal - ${settings[${NODE}_payValue]}" | bc);
-        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payDiff=$tmp_payDiff"
+        [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_payDiff=$tmp_payDiff"
         
         # pay data and last timestamp valid and current timestamp at the end of the current day, then store new values
         if [[ "$tmp_payValid" == "true" &&  "$tmp_payComplete" == "true" ]]; then
@@ -853,11 +852,11 @@ fi # // end of $include_current_earnings if clause
 DLOG=""
 
 if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]] && [[ $tmp_audits_failed -eq 0 ]] && [[ $temp_severe_errors -eq 0 ]] && [[ $tmp_reps_failed -eq 0 ]]; then 
-	DLOG="$DLOG [$NODE] : hdd $tmp_disk_gross > OK"
+	DLOG="$DLOG [$NODE] : hdd $tmp_disk_gross |"
     if [[ "$include_current_earnings" == "true" ]] ; then
         tmp_estimatedPayoutTotalString=$(printf '%.2f\n' $(echo -e "$tmp_payDiff" | awk '{print ( $1 * 1 ) / 100}'))\$
         tmp_estimatedPayoutTodayString=$(printf '%.2f\n' $(echo -e "$tmp_estimatedPayoutTotal" | awk '{print ( $1 * 1 ) / 100}'))\$
-        DLOG="$DLOG $tmp_estimatedPayoutTotalString / $tmp_estimatedPayoutTodayString";
+        DLOG="$DLOG d: $tmp_estimatedPayoutTotalString | m: $tmp_estimatedPayoutTodayString";
         [[ "$tmp_payComplete" == "false" ]] && DLOG="$DLOG (!)";
     fi
 else
@@ -971,20 +970,7 @@ cd $DIR
 if [[ "$DISCORDON" == "true" ]]; then
 # send discord push
 
-#[[ $tmp_fatal_errors -ne 0 ]] && echo true || echo false
-#[[ $tmp_io_errors -ne $tmp_rest_of_errors ]] && echo true || echo false
-#[[ $tmp_audits_failed -ne 0 ]] && echo true || echo false
-#[[ $temp_severe_errors -ne 0 ]] && echo true || echo false
-#[[ $put_repair_ratio_int -lt 95 ]] && echo true || echo false
-#[[ $get_repair_started -ne 0 ]] && echo true || echo false
-#[[ $get_repair_ratio_int -lt 95 ]] && echo true || echo false # --> true
-#[[ $tmp_reps_failed -ne 0 ]] && echo true || echo false
-#[[ $get_ratio_int -lt 90 ]] && echo true || echo false
-#[[ $put_ratio_int -lt 90 ]] && echo true || echo false
-#[[ "$tmp_no_getput_1h" == "true" ]] && echo true || echo false # --> true
-#[[ $DEB -eq 1 ]] && echo true || echo false
-
-if [ $tmp_fatal_errors -ne 0 -o $tmp_io_errors -ne $tmp_rest_of_errors -o $tmp_audits_failed -ne 0 -o $temp_severe_errors -ne 0 -o $put_repair_ratio_int -lt 95 -o \( $get_repair_started -ne 0 -a $get_repair_ratio_int -lt 95 \) -o $tmp_reps_failed -ne 0 -o $get_ratio_int -lt 90 -o $put_ratio_int -lt 90 -o "$tmp_no_getput_1h" == "true" -o $DEB -eq 1 ]; then 
+if [ $tmp_fatal_errors -ne 0 -o $tmp_io_errors -ne $tmp_rest_of_errors -o $tmp_audits_failed -ne 0 -o $temp_severe_errors -ne 0 -o $put_repair_ratio_int -lt 95 -o \( $get_repair_started -ne 0 -a $get_repair_ratio_int -lt 95 \) -o $tmp_reps_failed -ne 0 -o $get_ratio_int -lt 90 -o $put_ratio_int -lt 90 -o "$tmp_no_getput_1h" == "true" -o "$SENDPUSH" == "true" ]; then 
     { ./discord.sh --webhook-url="$DISCORDURL" --username "health check" --text "$DLOG"; } 2>/dev/null
     [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent."
 fi
@@ -996,9 +982,36 @@ then
     [[ "$VERBOSE" == "true" ]] && echo " *** discord satellite push sent."
 fi
 # in case of discord debug mode is on, also send success statistics
-if [[ $DEB -eq 1 ]] && [[ "$DISCORDON" == "true" ]]
+if [[ "$SENDPUSH" == "true" ]] && [[ "$DISCORDON" == "true" ]]
 then
-    { ./discord.sh --webhook-url="$DISCORDURL" --username "one-day stats" --text "[$NODE]\n.. audits (r: $audit_recfailrate, c: $audit_failrate, s: $audit_successrate)\n.. downloads (c: $dl_canratio, f: $dl_failratio, s: $get_ratio_int%)\n.. uploads (c: $put_cancel_ratio, f: $put_fail_ratio, s: $put_ratio_int%)\n.. rep down (c: $get_repair_canratio, f: $get_repair_failratio, s: $get_repair_ratio_int%)\n.. rep up (c: $put_repair_canratio, f: $put_repair_failratio, s: $put_repair_ratio_int%)"; } 2>/dev/null
+    if [[ "$DETAILEDSUCCESSRATES" == "false" ]]; then
+        tmp_audits="";
+        tmp_downloads="";
+        tmp_uploads="";
+        tmp_downReps="";
+        tmp_upReps="";
+        tmp_count=0;
+        
+        [[ "$audit_successrate" != "100%" ]] && tmp_audits="\n.. audits (r: $audit_recfailrate, c: $audit_failrate, s: $audit_successrate)" && ((tmp_count=tmp_count+1));
+        [[ $get_ratio_int -lt 98 ]] && tmp_downloads="\n.. downloads (c: $dl_canratio, f: $dl_failratio, s: $get_ratio_int%)" && ((tmp_count=tmp_count+1));
+        [[ $put_ratio_int -lt 98 ]] && tmp_uploads="\n.. uploads (c: $put_cancel_ratio, f: $put_fail_ratio, s: $put_ratio_int%)" && ((tmp_count=tmp_count+1));
+        [[ $get_repair_ratio_int -lt 100 ]] && tmp_downReps="\n.. rep down (c: $get_repair_canratio, f: $get_repair_failratio, s: $get_repair_ratio_int%)" && ((tmp_count=tmp_count+1));
+        [[ $put_repair_ratio_int -lt 100 ]] && tmp_putReps="\n.. rep up (c: $put_repair_canratio, f: $put_repair_failratio, s: $put_repair_ratio_int%)" && ((tmp_count=tmp_count+1));
+        
+        # only send push message, in case some scores are below 98%
+        if [[ $tmp_count -gt 0 ]]; then
+            tmp_fullString="[$NODE]";
+            [[ "$tmp_audits" != "" ]] && tmp_fullString="$tmp_fullString $tmp_audits";
+            [[ "$tmp_downloads" != "" ]] && tmp_fullString="$tmp_fullString $tmp_downloads";
+            [[ "$tmp_uploads" != "" ]] && tmp_fullString="$tmp_fullString $tmp_uploads";
+            [[ "$tmp_downReps" != "" ]] && tmp_fullString="$tmp_fullString $tmp_downReps";
+            [[ "$tmp_upReps" != "" ]] && tmp_fullString="$tmp_fullString $tmp_upReps";
+            { ./discord.sh --webhook-url="$DISCORDURL" --username "one-day stats" --text "$tmp_fullString"; } 2>/dev/null
+        fi
+        
+    else
+        { ./discord.sh --webhook-url="$DISCORDURL" --username "one-day stats" --text "[$NODE]\n.. audits (r: $audit_recfailrate, c: $audit_failrate, s: $audit_successrate)\n.. downloads (c: $dl_canratio, f: $dl_failratio, s: $get_ratio_int%)\n.. uploads (c: $put_cancel_ratio, f: $put_fail_ratio, s: $put_ratio_int%)\n.. rep down (c: $get_repair_canratio, f: $get_repair_failratio, s: $get_repair_ratio_int%)\n.. rep up (c: $put_repair_canratio, f: $put_repair_failratio, s: $put_repair_ratio_int%)"; } 2>/dev/null
+    fi
     [[ "$VERBOSE" == "true" ]] && echo " *** discord success rates push sent."
 fi
 fi
@@ -1025,7 +1038,7 @@ if [[ $temp_severe_errors -ne 0 ]]; then
 fi
 if [[ $tmp_rest_of_errors -ne 0 ]]; then
 	if [[ "$ignore_rest_of_errors" == "true" ]]; then
-		if [[ $DEB -eq 1 ]]; then
+		if [[ "$SENDPUSH" == "true" ]]; then
 			swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : OTHER ERRORS FOUND" --body "$ERRS" --silent "1"
 			[[ "$VERBOSE" == "true" ]] && echo " *** general error mail sent (ignore case: $ignore_rest_of_errors)."
 		fi
@@ -1051,9 +1064,9 @@ if [[ $tmp_reps_failed -ne 0 ]]; then
 fi
 
 # send debug mail 
-if [[ $DEB -eq 2 ]]; then
+if [[ "$SENDMAIL" == "true" ]]; then
 	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : DEBUG TEST MAIL" --body "blobb." --silent "1"
-	[[ "$VERBOSE" == "true" ]] && echo " *** debut mail sent."
+	[[ "$VERBOSE" == "true" ]] && echo " *** debug mail sent."
 fi
 
 fi
