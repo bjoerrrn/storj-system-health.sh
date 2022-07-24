@@ -713,8 +713,6 @@ fi
 # LOAD AND UPDATE SETTINGS FILE WITH ESTIMATED PAYOUTS PER STORJ NODE (SN)
 # ------------------------------------
 
-if [[ "$include_current_earnings" == "true" ]] ; then
-
     if [ ! -r "$settings_file" ]; then
         [[ "$VERBOSE" == "true" ]] && echo "warning: settings file could not be read; skipping payout estimation."
         include_current_earnings=false;
@@ -841,7 +839,6 @@ if [[ "$include_current_earnings" == "true" ]] ; then
             
         fi # // end of payout estimation if clause
     fi # // end of $settings_file readable if clause
-fi # // end of $include_current_earnings if clause
 
 
 # =============================================================================
