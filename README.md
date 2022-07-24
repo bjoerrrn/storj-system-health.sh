@@ -148,11 +148,11 @@ for macos please be aware of the following specifics:
 SHELL=/bin/sh
 PATH="/opt/homebrew/opt/sqlite/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 # UNIX:
-58 *    * * *   pi      cd /home/pi/scripts/ && ./checks.sh -ev
-10 7,19 * * *   pi      cd /home/pi/scripts/ && ./checks.sh -ed
+58 *    * * *   pi      cd /home/pi/scripts/ && ./checks.sh
+10 7,13,19,22 * * *   pi      cd /home/pi/scripts/ && ./checks.sh -de
 # MACOS
-# 58    *     *  *  *  /Users/me/checks.sh -ev >> /Users/me/Desktop/checks.txt 2>&1
-# 10    7,19  *  *  *  /Users/me/checks.sh -ed -c /Users/me/my.credo >> /Users/me/Desktop/checks.txt 2>&1
+# 58    *     *  *  *  /Users/me/checks.sh >> /Users/me/Desktop/checks.txt 2>&1
+# 10    7,19  *  *  *  /Users/me/checks.sh -de -c /Users/me/my.credo >> /Users/me/Desktop/checks.txt 2>&1
 ```
 
 ## example screenshots
