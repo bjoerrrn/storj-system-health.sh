@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.8.0 d
+# v1.8.0
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -731,23 +731,35 @@ if [[ "$include_current_earnings" == "true" ]] ; then
         tmp_payComplete=false
         tmp_payValid=false
         tmp_payDiff=0
-        tmp_timestamp=$(date --utc +"%s"); # current timestamp
-        tmp_todayDay=$(date --utc +"%d");  # TODO add support on MacOS
         
-        [[ "$VERBOSE" == "true" ]] && echo "... settings : local variables initiated."
+        if [[ "$UNAMEOUT" == "Darwin" ]] ; then
+            tmp_timestamp=$(date -ju +"%s"); 
+            tmp_todayDay=$(date -ju +"%d"); 
+            tmp_todayHour=$(date -ju +"%H"); 
+            tmp_todayMinutes=$(date -ju +"%M"); 
+        else
+            tmp_timestamp=$(date --utc +"%s");
+            tmp_todayDay=$(date --utc +"%d");
+            tmp_todayHour=$(date --utc +"%H"); 
+            tmp_todayMinutes=$(date --utc +"%M" ); 
+        fi
+        
+        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_todayDay=$tmp_todayDay";
+        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_todayHour=$tmp_todayHour";
+        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_todayMinutes=$tmp_todayMinutes";
     
         # check availability of $NODE_payTimestamp variable
         if [[ ${settings["${NODE}_payTimestamp"]+Y} ]]; then
             if [[ ${settings["${NODE}_payTimestamp"]} ]]; then
                 # ... not empty, great!
-                [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payTimestamp found."
+                # [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payTimestamp found."
             else
-                [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payTimestamp found, but empty."
+                # [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payTimestamp found, but empty."
                 updateSettings "${NODE}_payTimestamp" "${tmp_timestamp}";
                 settings["${NODE}_payTimestamp"]=$tmp_timestamp;
             fi
         else 
-            [[ "$VERBOSE" == "true" ]] && echo "warning: settings: ${!NODE}_payTimestamp not found."
+            # [[ "$VERBOSE" == "true" ]] && echo "warning: settings: ${!NODE}_payTimestamp not found."
             updateSettings "${NODE}_payTimestamp" "${tmp_timestamp}";
             settings["${NODE}_payTimestamp"]=$tmp_timestamp;
         fi
@@ -756,65 +768,69 @@ if [[ "$include_current_earnings" == "true" ]] ; then
         if [[ ${settings["${NODE}_payValue"]+Y} ]]; then
             if [[ ${settings["${NODE}_payValue"]} ]]; then
                 # ... not empty, great!
-                [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payValue found."
+                # [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payValue found."
             else
-                [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payValue found, but empty."
+                # [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payValue found, but empty."
                 updateSettings "${NODE}_payValue" "0";
                 settings["${NODE}_payValue"]=0;
             fi
         else 
-            [[ "$VERBOSE" == "true" ]] && echo "warning: settings: ${!NODE}_payValue not found."
+            # [[ "$VERBOSE" == "true" ]] && echo "warning: settings: ${!NODE}_payValue not found."
             updateSettings "${NODE}_payValue" "0";
             settings["${NODE}_payValue"]=0;
         fi
         
-        [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payTimestamp=${settings[${NODE}_payTimestamp]}"
-        [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payValue=${settings[${NODE}_payValue]}"
+        # [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payTimestamp=${settings[${NODE}_payTimestamp]}"
+        # [[ "$VERBOSE" == "true" ]] && echo "... settings : ${NODE}_payValue=${settings[${NODE}_payValue]}"
         
         # if today = 1st of a month; then payValue = 0;
         [[ $tmp_todayDay -eq 1 ]] && settings["${NODE}_payValue"]=0;
         
+        tmp_payTimestamp="${settings[${NODE}_payTimestamp]}"
+        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payTimestamp=$tmp_payTimestamp";
+                    
+        if [[ "$UNAMEOUT" == "Darwin" ]] ; then
+            tmp_payDateDay=$(date -juf "%s" $tmp_payTimestamp +"%d");
+            tmp_payDateHour=$(date -juf "%s" $tmp_payTimestamp +"%H");
+            tmp_payDateMinutes=$(date -juf "%s" $tmp_payTimestamp +"%M");
+        else
+            tmp_payDateDay=$(date --utc -d @"${settings[${NODE}_payTimestamp]}" +"%d");
+            tmp_payDateHour=$(date --utc -d @"${settings[${NODE}_payTimestamp]}" +"%H" ); 
+            tmp_payDateMinutes=$(date --utc -d @"${settings[${NODE}_payTimestamp]}" +"%M" ); 
+        fi
+
+        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payDateDay=$tmp_payDateDay"
+        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payDateHour=$tmp_payDateHour"
+        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payDateMinutes=$tmp_payDateMinutes"
+        
         # if payDate  = yesterday (or different than today); then payValid = true; else payValid = false;
-        # TODO add MacOS support for payDay check:
-            # DATE=20090801204150; date -jf "%Y%m%d%H%M%S" $DATE "+date \"%A,%_d %B %Y %H:%M:%S\""
-            # date -j -v-1d -f "%Y-%m-%d" "2011-09-01" "+%Y-%m-%d" ---> 2011-08-31
-        tmp_payTimestampDay=$(date --utc -d @"${settings[${NODE}_payTimestamp]}" +"%d");
-        [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payTimestampDay=$tmp_payTimestampDay"
-        if [[ $tmp_payTimestampDay -ne $tmp_todayDay ]]; then 
+        if [[ $tmp_payDateDay -ne $tmp_todayDay ]]; then 
             tmp_payValid=true;
-            [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payValid=$tmp_payValid"
+            # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payValid=$tmp_payValid"
             # if payDate timestamp between 23:45:00 and 23:59:59 (hh:mm:ss); then payComplete = true; else payComplete = false;
-            tmp_payDateHour=$(date --utc -d @"${settings[${NODE}_payTimestamp]}" +"%H" ); # TODO add support on MacOS
-            [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payDateHour=$tmp_payDateHour"
-            tmp_payDateMinutes=$(date --utc -d @"${settings[${NODE}_payTimestamp]}" +"%M" ); # TODO add support on MacOS
-            [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payDateMinutes=$tmp_payDateMinutes"
             [[ $tmp_payDateHour -eq 23 ]] && [[ $tmp_payDateMinutes -ge 50 ]] && [[ $tmp_payDateMinutes -le 59 ]] && tmp_payComplete=true;
-            [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payComplete=$tmp_payComplete"
+            # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payComplete=$tmp_payComplete"
         fi
         
         # select payout data with jq from storage node API
         tmp_estimated_payout_curl=$(curl -s "$node_url/api/sno/estimated-payout")
         tmp_egressBandwidthPayout=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonth.egressBandwidthPayout'));
-        [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_egressBandwidthPayout=$tmp_egressBandwidthPayout"
+        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_egressBandwidthPayout=$tmp_egressBandwidthPayout"
         tmp_egressRepairAuditPayout=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonth.egressRepairAuditPayout'));
-        [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_egressRepairAuditPayout=$tmp_egressRepairAuditPayout"
+        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_egressRepairAuditPayout=$tmp_egressRepairAuditPayout"
         tmp_diskSpacePayout=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonth.diskSpacePayout'));
-        [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_diskSpacePayout=$tmp_diskSpacePayout"
+        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_diskSpacePayout=$tmp_diskSpacePayout"
         tmp_currentMonthExpectations=$(echo -E $(echo -E "$tmp_estimated_payout_curl" | jq '.currentMonthExpectations'));
-        [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_currentMonthExpectations=$tmp_currentMonthExpectations"
+        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_currentMonthExpectations=$tmp_currentMonthExpectations"
         # sum up estimatedPayoutTotal for the current month in dollar-cents
         tmp_estimatedPayoutTotal=$(echo "$tmp_egressBandwidthPayout + $tmp_egressRepairAuditPayout + $tmp_diskSpacePayout" | bc);
-        [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_estimatedPayoutTotal calculated: $tmp_estimatedPayoutTotal"
+        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_estimatedPayoutTotal calculated: $tmp_estimatedPayoutTotal"
         # ... calculate payDiff (=earnings for today) from estimatedPayoutTotal <minus> settings["${NODE}_payValue"]
         tmp_payDiff=$(echo "$tmp_estimatedPayoutTotal - ${settings[${NODE}_payValue]}" | bc);
-        [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payDiff=$tmp_payDiff"
+        # [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_payDiff=$tmp_payDiff"
         
         # pay data and last timestamp valid and current timestamp at the end of the current day, then store new values
         if [[ "$tmp_payValid" == "true" &&  "$tmp_payComplete" == "true" ]]; then
-            tmp_todayHour=$(date --utc +"%H"); # TODO add support on MacOS
-            [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_todayHour=$tmp_todayHour"
-            tmp_todayMinutes=$(date --utc +"%M" ); # TODO add support on MacOS
-            [[ "$VERBOSE" == "true" ]] && echo "... settings : tmp_todayMinutes=$tmp_todayMinutes"
             if [[ $tmp_todayHour -eq 23 && $tmp_todayMinutes -ge 50 && $tmp_todayMinutes -le 59 ]]; then
                 # set payValue = estimatedPayoutTotal --> persistent storage !!
                 updateSettings "${NODE}_payValue" "$tmp_estimatedPayoutTotal";
@@ -825,7 +841,6 @@ if [[ "$include_current_earnings" == "true" ]] ; then
         fi # // end of payout estimation if clause
     fi # // end of $settings_file readable if clause
 fi # // end of $include_current_earnings if clause
-
 
 
 # =============================================================================
