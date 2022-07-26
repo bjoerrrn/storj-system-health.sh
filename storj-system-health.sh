@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.8.1
+# v1.8.2
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -83,8 +83,8 @@ DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
 
 [[ "$VERBOSE" == "true" ]] && echo "==="
 [[ "$VERBOSE" == "true" ]] && echo -e " *** timestamp [$(date +'%d.%m.%Y %H:%M')]"
-[[ "$VERBOSE" == "true" ]] && [[ "$SENDPUSH" == "true" ]] && echo -e " *** discord mode on"
-[[ "$VERBOSE" == "true" ]] && [[ "$SENDMAIL" == "true" ]] && echo -e " *** mail debug mode on"
+[[ "$VERBOSE" == "true" ]] && [[ "$SENDPUSH" == "true" ]] && echo -e " *** discord push will be sent"
+[[ "$VERBOSE" == "true" ]] && [[ "$SENDMAIL" == "true" ]] && echo -e " *** test mail will be sent"
 
 
 # =============================================================================
@@ -713,6 +713,19 @@ fi
 # LOAD AND UPDATE SETTINGS FILE WITH ESTIMATED PAYOUTS PER STORJ NODE (SN)
 # ------------------------------------
 
+    if [[ "$UNAMEOUT" == "Darwin" ]] ; then
+        tmp_timestamp=$(date -ju +"%s"); 
+        tmp_todayDay=$(date -ju +"%-d"); 
+        tmp_todayHour=$(date -ju +"%-H"); 
+        tmp_todayMinutes=$(date -ju +"%-M"); 
+    else
+        tmp_timestamp=$(date --utc +"%s");
+        tmp_todayDay=$(date --utc +"%-d");
+        tmp_todayHour=$(date --utc +"%-H"); 
+        tmp_todayMinutes=$(date --utc +"%-M" ); 
+    fi
+
+
     if [ ! -r "$settings_file" ]; then
         [[ "$VERBOSE" == "true" ]] && echo "warning: settings file could not be read; skipping payout estimation."
         include_current_earnings=false;
@@ -728,19 +741,7 @@ fi
         # initiate local variables 
         tmp_payComplete=false
         tmp_payValid=false
-        tmp_payDiff=0
-        
-        if [[ "$UNAMEOUT" == "Darwin" ]] ; then
-            tmp_timestamp=$(date -ju +"%s"); 
-            tmp_todayDay=$(date -ju +"%-d"); 
-            tmp_todayHour=$(date -ju +"%-H"); 
-            tmp_todayMinutes=$(date -ju +"%-M"); 
-        else
-            tmp_timestamp=$(date --utc +"%s");
-            tmp_todayDay=$(date --utc +"%-d");
-            tmp_todayHour=$(date --utc +"%-H"); 
-            tmp_todayMinutes=$(date --utc +"%-M" ); 
-        fi
+        tmp_payDiff=0        
         
         [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_todayDay=$tmp_todayDay";
         [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_todayHour=$tmp_todayHour";
@@ -967,7 +968,11 @@ cd $DIR
 if [[ "$DISCORDON" == "true" ]]; then
 # send discord push
 
-if [ $tmp_fatal_errors -ne 0 -o $tmp_io_errors -ne $tmp_rest_of_errors -o $tmp_audits_failed -ne 0 -o $temp_severe_errors -ne 0 -o $put_repair_ratio_int -lt 95 -o \( $get_repair_started -ne 0 -a $get_repair_ratio_int -lt 95 \) -o $tmp_reps_failed -ne 0 -o $get_ratio_int -lt 90 -o $put_ratio_int -lt 90 -o "$tmp_no_getput_1h" == "true" -o "$SENDPUSH" == "true" ]; then 
+if [ $tmp_fatal_errors -ne 0 -o $tmp_io_errors -ne $tmp_rest_of_errors -o \
+     $tmp_audits_failed -ne 0 -o $temp_severe_errors -ne 0 -o $put_repair_ratio_int -lt 95 -o \
+     \( $get_repair_started -ne 0 -a $get_repair_ratio_int -lt 95 \) -o \
+     $tmp_reps_failed -ne 0 -o $get_ratio_int -lt 90 -o $put_ratio_int -lt 90 -o \
+     "$tmp_no_getput_1h" == "true" -o "$SENDPUSH" == "true" ]; then 
     { ./discord.sh --webhook-url="$DISCORDURL" --username "health check" --text "$DLOG"; } 2>/dev/null
     [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent."
 fi
@@ -979,7 +984,9 @@ then
     [[ "$VERBOSE" == "true" ]] && echo " *** discord satellite push sent."
 fi
 # in case of discord debug mode is on, also send success statistics
-if [[ "$SENDPUSH" == "true" ]] && [[ "$DISCORDON" == "true" ]]
+# in case discord is configured and it is "end of the day", send push anyway as a summary
+if [ \( "$SENDPUSH" == "true" -a "$DISCORDON" == "true" \) -o \
+     \( $tmp_payDateHour -eq 23 -a $tmp_payDateMinutes -ge 50 -a $tmp_payDateMinutes -le 59 \) ]
 then
     if [[ "$DETAILEDSUCCESSRATES" == "false" ]]; then
         tmp_audits="";
