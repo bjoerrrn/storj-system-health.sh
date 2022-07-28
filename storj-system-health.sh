@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.8.2
+# v1.8.3
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -466,7 +466,6 @@ AUDS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT' | grep 'failed')"
 FATS="$(echo "$LOG1H" 2>&1 | grep 'FATAL' | grep -v 'INFO')"
 ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'INFO' -e 'FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity' -e 'connection reset by peer')"
 DREPS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_REPAIR' | grep 'failed')"
-PREPS="$(echo "$LOG1H" 2>&1 | grep -E 'PUT_REPAIR' | grep 'failed')"
 
 # added "severe" errors in order to recognize e.g. docker issues, connectivity issues etc.
 SEVERE="$(echo "$LOG1H" 2>&1 | grep -i -e 'error:' -e 'fatal:' -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -e 'Unable to read the disk' -e 'software caused connection abort' | grep -v -e 'emptying trash failed' -e 'INFO' -e 'FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity' -e 'failed to settle orders for satellite' -e 'rpc client')"
@@ -478,7 +477,7 @@ SEVERE="$(echo "$LOG1H" 2>&1 | grep -i -e 'error:' -e 'fatal:' -e 'unexpected sh
 [[ "$VERBOSE" == "true" ]] && tmp_info="$(echo "$INFO" 2>&1 | grep 'INFO' -c)"
 tmp_fatal_errors="$(echo "$FATS" 2>&1 | grep 'FATAL' -c)"
 tmp_audits_failed="$(echo "$AUDS" 2>&1 | grep -E 'GET_AUDIT' | grep 'failed' -c)"
-tmp_reps_failed=$(($(echo "$DREPS" 2>&1 | grep 'failed' -c)+$(echo "$PREPS" 2>&1 | grep 'failed' -c)))
+tmp_reps_failed="$(echo "$DREPS" 2>&1 | grep 'failed' -c)"
 tmp_rest_of_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' -c)"
 tmp_io_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' | grep -e 'timeout' -e 'connection reset' -c)"
 temp_severe_errors="$(echo "$SEVERE" 2>&1 | grep -i -e 'error:' -e 'fatal:' -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -e 'Unable to read the disk' -e 'software caused connection abort' -c)"
@@ -708,7 +707,6 @@ fi
 [[ "$VERBOSE" == "true" ]] && echo " *** i/o timouts ignored    : $ignore_rest_of_errors"
 
 
-
 # =============================================================================
 # LOAD AND UPDATE SETTINGS FILE WITH ESTIMATED PAYOUTS PER STORJ NODE (SN)
 # ------------------------------------
@@ -866,7 +864,7 @@ if [[ $tmp_audits_failed -ne 0 ]]; then
 fi
 
 if [[ $tmp_reps_failed -ne 0 ]]; then
-	DLOG="$DLOG repair issues: $get_repair_failed down ($get_repair_failratio) | $put_repair_failed up ($put_repair_failratio)"
+	DLOG="$DLOG repair issues: $get_repair_failed down ($get_repair_failratio)"
 fi
 
 if [[ $audit_difference -gt 1 ]]; then
@@ -890,24 +888,24 @@ if [[ $tmp_rest_of_errors -ne 0 ]]; then
 fi
 
 if [[ "$tmp_overused_warning" == "true" ]] ; then
-    DLOG="$DLOG; \n.. space warning : overused"
+    DLOG="$DLOG \n.. space warning : overused"
 fi
 
 
-if [ $get_repair_started -ne 0 -a \( $get_repair_ratio_int -lt 95 -o $put_repair_ratio_int -lt 95 \) ]; then
-	DLOG="$DLOG; \n.. warning !! rep ↓ $get_repair_ratio_int / ↑ $put_repair_ratio_int \n-> risk of getting disqualified"
+if [ $get_repair_started -ne 0 -a $get_repair_ratio_int -lt 95 ]; then
+	DLOG="$DLOG \n.. warning !! rep ↓ $get_repair_ratio_int\n-> risk of getting disqualified"
 fi
 
 if [[ $gets_recent_hour -eq 0 ]] && [[ $puts_recent_hour -eq 0 ]]; then
-	DLOG="$DLOG; \n.. warning !! no get/put in last $LOGMINm"
+	DLOG="$DLOG \n.. warning !! no get/put in last $LOGMINm"
 fi
 
 if [[ $get_ratio_int -lt 90 ]] || [[ $put_ratio_int -lt 90 ]]; then
-	DLOG="$DLOG; \n.. warning !! ↓ $get_ratio_int / ↑ $put_ratio_int low"
+	DLOG="$DLOG \n.. warning !! ↓ $get_ratio_int / ↑ $put_ratio_int low"
 fi
 
 if [[ "$storj_newer_version" == "true" ]] ; then
-    DLOG="$DLOG; \n.. new version : $storj_version_current > $storj_version_latest" #  [$storj_version_date]
+    DLOG="$DLOG \n.. new version : $storj_version_current > $storj_version_latest" #  [$storj_version_date]
 fi
 
 
@@ -941,8 +939,6 @@ if [[ "$VERBOSE" == "true" ]] ; then
 		echo "==="
 		echo "REPAIR DOWNLOAD"
 		echo "$DREPS"
-		echo "REPAIR UPLOAD"
-		echo "$PREPS"
 	fi
 	if [ ! -z "$satellite_scores" ]; then
 		echo "==="
@@ -969,7 +965,7 @@ if [[ "$DISCORDON" == "true" ]]; then
 # send discord push
 
 if [ $tmp_fatal_errors -ne 0 -o $tmp_io_errors -ne $tmp_rest_of_errors -o \
-     $tmp_audits_failed -ne 0 -o $temp_severe_errors -ne 0 -o $put_repair_ratio_int -lt 95 -o \
+     $tmp_audits_failed -ne 0 -o $temp_severe_errors -ne 0 -o \
      \( $get_repair_started -ne 0 -a $get_repair_ratio_int -lt 95 \) -o \
      $tmp_reps_failed -ne 0 -o $get_ratio_int -lt 90 -o $put_ratio_int -lt 90 -o \
      "$tmp_no_getput_1h" == "true" -o "$SENDPUSH" == "true" ]; then 
@@ -985,8 +981,9 @@ then
 fi
 # in case of discord debug mode is on, also send success statistics
 # in case discord is configured and it is "end of the day", send push anyway as a summary
+[[ "$DEBUG" == "true" ]] && echo "... push message sending: sendpush: $SENDPUSH, discordon: $DISCORDON, hour: $tmp_todayHour, minutes: $tmp_todayMinutes, details: $DETAILEDSUCCESSRATES";
 if [ \( "$SENDPUSH" == "true" -a "$DISCORDON" == "true" \) -o \
-     \( $tmp_payDateHour -eq 23 -a $tmp_payDateMinutes -ge 50 -a $tmp_payDateMinutes -le 59 \) ]
+     \( $tmp_todayHour -eq 23 -a $tmp_todayMinutes -ge 50 -a $tmp_todayMinutes -le 59 \) ]
 then
     if [[ "$DETAILEDSUCCESSRATES" == "false" ]]; then
         tmp_audits="";
@@ -1063,7 +1060,7 @@ if [[ "$audit_difference_repeat" == "false" ]]; then
 	fi
 fi
 if [[ $tmp_reps_failed -ne 0 ]]; then 
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : REPAIR FAILURES FOUND" --body "Download: $get_repair_failed_text \n\nUppload: $put_repair_failed_text" --silent "1"
+	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : REPAIR FAILURES FOUND" --body "$get_repair_failed_text" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** repair failures mail sent."
 fi
 
