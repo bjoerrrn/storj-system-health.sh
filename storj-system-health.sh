@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.8.3
+# v1.9.0
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -841,13 +841,54 @@ fi
 
 
 # =============================================================================
+# CHECKS THE LOG1H PART OF THE LOGS, IF THERE IS A TIME LAG BETWEEN GET_AUDITs 
+# LARGER THAN 3 MINUTES, WHICH WILL LEAD TO ALMOST IMMEDIATE DISCQUALIFICATION, 
+# IF THE ROOT CAUSE IS NOT IDENTIFIED NOR FIXED. 
+# details: https://forum.storj.io/t/auditscore-on-tardigrade-decreased-without-errors/19097/6
+# referencing github issue for the storj project: https://github.com/storj/storj/issues/4995
+# ------------------------------------ 
+
+tmp_auditTimeLags=$(echo -E $(echo "$LOG1H" |
+jq -Rn '
+    reduce (
+        inputs / "\t" |
+        .[4] |= fromjson |
+        select(.[4].Action == "GET_AUDIT") |
+        [
+            ( .[0] | sub("\\.\\d+Z$"; "Z") | strptime("%Y-%m-%dT%H:%M:%SZ") | mktime ),
+            .[3],
+            .[4]."Satellite ID",
+            ( .[4]."Satellite ID" + "." + .[4]."Piece ID" )
+        ]
+    ) as [ $time, $event, $id, $address ] (
+        [{},{}];
+        if $event == "download started"
+        then
+            .[1][$address] = $time
+        else
+            if (.[1] | has($address) | not) or ($time - .[1][$address]) / 60 > 3
+            then
+                .[0][$id] += 1
+            else
+                .
+            end
+        end
+    ) |
+    .[0]
+'))
+
+[[ "$DEBUG" == "true" ]] && echo "... audit time lags selection: $tmp_auditTimeLags"
+
+
+
+# =============================================================================
 # CONCATENATE THE PUSH MESSAGE
 # ------------------------------------
 
 #reset DLOG
 DLOG=""
 
-if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]] && [[ $tmp_audits_failed -eq 0 ]] && [[ $temp_severe_errors -eq 0 ]] && [[ $tmp_reps_failed -eq 0 ]]; then 
+if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]] && [[ $tmp_audits_failed -eq 0 ]] && [[ $temp_severe_errors -eq 0 ]] && [[ $tmp_reps_failed -eq 0 ]] && [[ "$tmp_auditTimeLags" != "{}" ]]; then 
 	DLOG="$DLOG [$NODE] : hdd $tmp_disk_gross"
     if [[ "$include_current_earnings" == "true" ]] ; then
         tmp_estimatedPayoutTotalString=$(printf '%.2f\n' $(echo -e "$tmp_payDiff" | awk '{print ( $1 * 1 ) / 100}'))\$
@@ -857,6 +898,10 @@ if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]]
     fi
 else
 	DLOG="**warning** [$NODE] : "
+fi
+
+if [[ "$tmp_auditTimeLags" != "{}" ]]; then
+	DLOG="$DLOG audit issues: download started/finished time lags > disqualification risk!"
 fi
 
 if [[ $tmp_audits_failed -ne 0 ]]; then
@@ -910,52 +955,6 @@ fi
 
 
 # =============================================================================
-# ECHO OUTPUT IN CASE COMMAND LINE USAGE (in debug modes)
-# ------------------------------------
-
-# dlog echo to terminal
-[[ "$VERBOSE" == "true" ]] && echo "==="
-[[ "$VERBOSE" == "true" ]] && echo " message: $DLOG"
-
-
-if [[ "$VERBOSE" == "true" ]] ; then
-	# log excerpt echo
-	if [[ $tmp_rest_of_errors -ne 0 ]]; then 
-		echo "==="
-		echo "ERRORS"
-		echo "$ERRS"
-	fi
-	if [[ $tmp_fatal_errors -ne 0 ]]; then 
-		echo "==="
-		echo "FATAL ERRORS"
-		echo "$FATS"
-	fi
-	if [[ $tmp_audits_failed -ne 0 ]]; then 
-		echo "==="
-		echo "AUDIT"
-		echo "$AUDS"
-	fi
-	if [[ $tmp_reps_failed -ne 0 ]]; then
-		echo "==="
-		echo "REPAIR DOWNLOAD"
-		echo "$DREPS"
-	fi
-	if [ ! -z "$satellite_scores" ]; then
-		echo "==="
-		echo "SATELLITE SCORES"
-		echo "$satellite_scores"
-	fi
-	if [[ $temp_severe_errors -ne 0 ]]; then
-		echo "==="
-		echo "SEVERE ERRORS"
-		echo "$SEVERE"
-	fi
-	echo "==="
-fi
-
-
-
-# =============================================================================
 # SEND THE PUSH MESSAGE TO DISCORD
 # ------------------------------------
 
@@ -968,7 +967,8 @@ if [ $tmp_fatal_errors -ne 0 -o $tmp_io_errors -ne $tmp_rest_of_errors -o \
      $tmp_audits_failed -ne 0 -o $temp_severe_errors -ne 0 -o \
      \( $get_repair_started -ne 0 -a $get_repair_ratio_int -lt 95 \) -o \
      $tmp_reps_failed -ne 0 -o $get_ratio_int -lt 90 -o $put_ratio_int -lt 90 -o \
-     "$tmp_no_getput_1h" == "true" -o "$SENDPUSH" == "true" ]; then 
+     "$tmp_no_getput_1h" == "true" -o "$SENDPUSH" == "true" -o "$tmp_auditTimeLags" != "{}" -o \
+     \( $tmp_todayHour -eq 23 -a $tmp_todayMinutes -ge 50 -a $tmp_todayMinutes -le 59 \) ]; then 
     { ./discord.sh --webhook-url="$DISCORDURL" --username "health check" --text "$DLOG"; } 2>/dev/null
     [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent."
 fi
@@ -982,8 +982,7 @@ fi
 # in case of discord debug mode is on, also send success statistics
 # in case discord is configured and it is "end of the day", send push anyway as a summary
 [[ "$DEBUG" == "true" ]] && echo "... push message sending: sendpush: $SENDPUSH, discordon: $DISCORDON, hour: $tmp_todayHour, minutes: $tmp_todayMinutes, details: $DETAILEDSUCCESSRATES";
-if [ \( "$SENDPUSH" == "true" -a "$DISCORDON" == "true" \) -o \
-     \( $tmp_todayHour -eq 23 -a $tmp_todayMinutes -ge 50 -a $tmp_todayMinutes -le 59 \) ]
+if [ \( "$SENDPUSH" == "true" -a "$DISCORDON" == "true" \) ]
 then
     if [[ "$DETAILEDSUCCESSRATES" == "false" ]]; then
         tmp_audits="";
@@ -1028,6 +1027,11 @@ if [[ "$MAILON" == "true" ]]; then
 if [ ! -z "$satellite_scores" ] && [[ "$satellite_notification" == "true" ]]; then
     swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : SATELLITE SCORES BELOW THRESHOLD" --body "$satellite_scores" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** satellite warning mail sent."
+fi
+
+if [[ "$tmp_auditTimeLags" != "{}" ]]; then 
+	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : AUDIT TIME LAGS FOUND > risk of being disqualified" --body "risk of being disqualified!! \n\n$tmp_auditTimeLags" --silent "1"
+	[[ "$VERBOSE" == "true" ]] && echo " *** audit time lag warning mail sent."
 fi
 if [[ $tmp_fatal_errors -ne 0 ]]; then 
 	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : FATAL ERRORS FOUND" --body "$FATS" --silent "1"
