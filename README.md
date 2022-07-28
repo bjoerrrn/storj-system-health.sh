@@ -8,10 +8,11 @@ this linux/macos shell script checks, if a [storj node][storagenode] (from the [
 * multinode support 🌍
 * optionally discord (as quick notifications) and/or mail (with error details) alerts 📥 🔔
 * alerts, in case: ⚠️
-  * audit, suspension and/or online scores are below a threshold (storj node discqualification risk)
+  * audit, suspension and/or online scores are below a threshold (storj node disqualification risk)
   * audit timeouts are recognized (pending audits; discqualification risk) 
-  * a threshold of repair gets/puts and downloads/uploads are reached (storj node discqualification risk)
-  * there was no get/put at all in the last hour (storj node discqualification risk)
+  * audit time lags: download started vs. download finished is larger than 3 mins (storj node disqualification risk)
+  * a threshold of repair gets/puts and downloads/uploads are reached (storj node disqualification risk)
+  * there was no get/put at all in the last hour (storj node disqualification risk)
   * any other fatal error occurs, incl. issues with docker stability
   * storj node version is outdated
   * the node is offline (docker container not started)
