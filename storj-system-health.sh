@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.9.1
+# v1.9.2
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -852,8 +852,7 @@ tmp_auditTimeLags=$(echo -E $(echo "$LOG1H" |
 jq -Rn '
     reduce (
         inputs / "\t" |
-        select( length == 5 ) |
-        .[4] |= fromjson |
+        try ( .[4] |= fromjson ) catch empty |
         select(.[4].Action == "GET_AUDIT") |
         [
             ( .[0] | sub("\\.\\d+Z$"; "Z") | strptime("%Y-%m-%dT%H:%M:%SZ") | mktime ),
@@ -877,6 +876,9 @@ jq -Rn '
     ) |
     if .[0] != {} then .[0] else empty end
 '))
+
+# tmp_auditTimeLags=$(echo -E $(echo "$LOG1H" |
+# '))
 
 # help variable to test, if content is null or not
 [ -n "$tmp_auditTimeLags" ] && tmp_auditTimeLagsFilled=true || tmp_auditTimeLagsFilled=false
