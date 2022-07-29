@@ -877,9 +877,6 @@ jq -Rn '
     if .[0] != {} then .[0] else empty end
 '))
 
-# tmp_auditTimeLags=$(echo -E $(echo "$LOG1H" |
-# '))
-
 # help variable to test, if content is null or not
 [ -n "$tmp_auditTimeLags" ] && tmp_auditTimeLagsFilled=true || tmp_auditTimeLagsFilled=false
 
