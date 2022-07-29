@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.9.0
+# v1.9.1
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -464,7 +464,7 @@ audit_difference=0
 [[ "$VERBOSE" == "true" ]] && INFO="$(echo "$LOG1H" 2>&1 | grep 'INFO')"
 AUDS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT' | grep 'failed')"
 FATS="$(echo "$LOG1H" 2>&1 | grep 'FATAL' | grep -v 'INFO')"
-ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'INFO' -e 'FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity' -e 'connection reset by peer')"
+ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'INFO' -e 'FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity' -e 'connection reset by peer' -e 'context canceled')"
 DREPS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_REPAIR' | grep 'failed')"
 
 # added "severe" errors in order to recognize e.g. docker issues, connectivity issues etc.
@@ -852,6 +852,7 @@ tmp_auditTimeLags=$(echo -E $(echo "$LOG1H" |
 jq -Rn '
     reduce (
         inputs / "\t" |
+        select( length == 5 ) |
         .[4] |= fromjson |
         select(.[4].Action == "GET_AUDIT") |
         [
@@ -874,11 +875,13 @@ jq -Rn '
             end
         end
     ) |
-    .[0]
+    if .[0] != {} then .[0] else empty end
 '))
 
-[[ "$DEBUG" == "true" ]] && echo "... audit time lags selection: $tmp_auditTimeLags"
+# help variable to test, if content is null or not
+[ -n "$tmp_auditTimeLags" ] && tmp_auditTimeLagsFilled=true || tmp_auditTimeLagsFilled=false
 
+[[ "$DEBUG" == "true" ]] && echo "... audit time lags selection: $tmp_auditTimeLags"
 
 
 # =============================================================================
@@ -888,7 +891,7 @@ jq -Rn '
 #reset DLOG
 DLOG=""
 
-if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]] && [[ $tmp_audits_failed -eq 0 ]] && [[ $temp_severe_errors -eq 0 ]] && [[ $tmp_reps_failed -eq 0 ]] && [[ "$tmp_auditTimeLags" != "{}" ]]; then 
+if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]] && [[ $tmp_audits_failed -eq 0 ]] && [[ $temp_severe_errors -eq 0 ]] && [[ $tmp_reps_failed -eq 0 ]] && [[ "$tmp_auditTimeLagsFilled" == "false" ]]; then 
 	DLOG="$DLOG [$NODE] : hdd $tmp_disk_gross"
     if [[ "$include_current_earnings" == "true" ]] ; then
         tmp_estimatedPayoutTotalString=$(printf '%.2f\n' $(echo -e "$tmp_payDiff" | awk '{print ( $1 * 1 ) / 100}'))\$
@@ -900,7 +903,7 @@ else
 	DLOG="**warning** [$NODE] : "
 fi
 
-if [[ "$tmp_auditTimeLags" != "{}" ]]; then
+if [[ "$tmp_auditTimeLagsFilled" == "true" ]]; then
 	DLOG="$DLOG audit issues: download started/finished time lags > disqualification risk!"
 fi
 
@@ -967,17 +970,17 @@ if [ $tmp_fatal_errors -ne 0 -o $tmp_io_errors -ne $tmp_rest_of_errors -o \
      $tmp_audits_failed -ne 0 -o $temp_severe_errors -ne 0 -o \
      \( $get_repair_started -ne 0 -a $get_repair_ratio_int -lt 95 \) -o \
      $tmp_reps_failed -ne 0 -o $get_ratio_int -lt 90 -o $put_ratio_int -lt 90 -o \
-     "$tmp_no_getput_1h" == "true" -o "$SENDPUSH" == "true" -o "$tmp_auditTimeLags" != "{}" -o \
+     "$tmp_no_getput_1h" == "true" -o "$SENDPUSH" == "true" -o "$tmp_auditTimeLagsFilled" == "true" -o \
      \( $tmp_todayHour -eq 23 -a $tmp_todayMinutes -ge 50 -a $tmp_todayMinutes -le 59 \) ]; then 
     { ./discord.sh --webhook-url="$DISCORDURL" --username "health check" --text "$DLOG"; } 2>/dev/null
-    [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent."
+    [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent: $DLOG"
 fi
 # separated satellites push from errors, occured last $LOGMIN - as scores last "longer"
 # and push frequency limited by $satellite_notification anyway
 if [ ! -z "$satellite_scores" ] && [[ "$satellite_notification" == "true" ]] && [[ "$DISCORDON" == "true" ]]
 then
     { ./discord.sh --webhook-url="$DISCORDURL" --username "satellites warning" --text "[$NODE]: $satellite_scores"; } 2>/dev/null
-    [[ "$VERBOSE" == "true" ]] && echo " *** discord satellite push sent."
+    [[ "$VERBOSE" == "true" ]] && echo " *** discord satellite push sent: $DLOG"
 fi
 # in case of discord debug mode is on, also send success statistics
 # in case discord is configured and it is "end of the day", send push anyway as a summary
@@ -1029,7 +1032,7 @@ if [ ! -z "$satellite_scores" ] && [[ "$satellite_notification" == "true" ]]; th
 	[[ "$VERBOSE" == "true" ]] && echo " *** satellite warning mail sent."
 fi
 
-if [[ "$tmp_auditTimeLags" != "{}" ]]; then 
+if [[ "$tmp_auditTimeLagsFilled" == "true" ]]; then 
 	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : AUDIT TIME LAGS FOUND > risk of being disqualified" --body "risk of being disqualified!! \n\n$tmp_auditTimeLags" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** audit time lag warning mail sent."
 fi
