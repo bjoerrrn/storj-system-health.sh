@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.9.2
+# v1.9.3
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -38,6 +38,7 @@ settings_satellite_key="satping"               # settings satellite ping key
 settings_satellite_timestamp=$(date +"%s")     # settings satellite ping value of now
 audit_difference_repeat=false                  # help variable in case of pending audits
 include_current_earnings=false                 # show current month's earnings yes/no
+current_earnings_only=false                    # skip a full check and push hdd usage + earnings only
 
 # help text
 
@@ -50,6 +51,7 @@ General options:
   -c <path>     Use individual file path for properties
   -d            send discord push 
   -e            Show current month's earnings
+  -E            Show only current month's earnings (skip docker logs analysis)
   -l <int>.     Override LOGMIN specified in settings, format: minutes as integer
   -m            send test mail in order to test mail server settings
   -p <path>     Provide a path to support crontab on MacOS
@@ -60,7 +62,7 @@ General options:
 
 # parameter handling
 
-while getopts ":hc:s:dmp:l:veqo" flag
+while getopts ":hc:s:dmp:l:veEqo" flag
 do
     case "${flag}" in
         c) config_file=${OPTARG};;
@@ -71,6 +73,7 @@ do
         l) LOGMIN_OVERRIDE=${OPTARG};;
         v) VERBOSE=true;;
         e) include_current_earnings=true;;
+        E) include_current_earnings=true && current_earnings_only=true;;
         q) DEBUG=true;;
         o) DETAILEDSUCCESSRATES=true;;
         h | *) echo "$help_text" && exit 0;;
@@ -384,6 +387,12 @@ else
     echo "warning : storj version not available, please verify access."
 fi
 
+
+
+# // skip docker logs analysis in case -E param was provided (to speed things up)
+if [[ "$current_earnings_only" == "false" ]]; then
+
+
 LOG1D=""
 LOG1H=""
 NODELOGPATH=${NODELOGPATHS[$i]}
@@ -441,6 +450,7 @@ else
             [[ "$VERBOSE" == "true" ]] && echo " *** log file loaded $LOGMIN minutes : #$tmp_count"
     fi
 fi
+
 
 
 # =============================================================================
@@ -707,6 +717,55 @@ fi
 [[ "$VERBOSE" == "true" ]] && echo " *** i/o timouts ignored    : $ignore_rest_of_errors"
 
 
+
+# =============================================================================
+# CHECKS THE LOG1H PART OF THE LOGS, IF THERE IS A TIME LAG BETWEEN GET_AUDITs 
+# LARGER THAN 3 MINUTES, WHICH WILL LEAD TO ALMOST IMMEDIATE DISCQUALIFICATION, 
+# IF THE ROOT CAUSE IS NOT IDENTIFIED NOR FIXED. 
+# details: https://forum.storj.io/t/auditscore-on-tardigrade-decreased-without-errors/19097/6
+# referencing github issue for the storj project: https://github.com/storj/storj/issues/4995
+# ------------------------------------ 
+
+tmp_auditTimeLags=$(echo -E $(echo "$LOG1H" |
+jq -Rn '
+    reduce (
+        inputs / "\t" |
+        try ( .[4] |= fromjson ) catch empty |
+        select(.[4].Action == "GET_AUDIT") |
+        [
+            ( .[0] | sub("\\.\\d+Z$"; "Z") | strptime("%Y-%m-%dT%H:%M:%SZ") | mktime ),
+            .[3],
+            .[4]."Satellite ID",
+            .[4]."Piece ID"
+        ]
+    ) as [ $time, $event, $satelliteID, $pieceID ] (
+        [{},{}];
+        if $event == "download started"
+        then
+            .[1][$pieceID] = $time
+        else
+            if (.[1] | has($pieceID) | not) or ($time - .[1][$pieceID]) / 60 > 3
+            then
+                .[0][$satelliteID] += 1
+            else
+                .
+            end
+        end
+    ) |
+    if .[0] != {} then .[0] else empty end
+'))
+
+# help variable to test, if content is null or not
+[ -n "$tmp_auditTimeLags" ] && tmp_auditTimeLagsFilled=true || tmp_auditTimeLagsFilled=false
+
+[[ "$DEBUG" == "true" ]] && echo "... audit time lags selection: $tmp_auditTimeLags"
+
+
+
+fi # // end of if clause for skipping docker logs analysis
+
+
+
 # =============================================================================
 # LOAD AND UPDATE SETTINGS FILE WITH ESTIMATED PAYOUTS PER STORJ NODE (SN)
 # ------------------------------------
@@ -841,54 +900,14 @@ fi
 
 
 # =============================================================================
-# CHECKS THE LOG1H PART OF THE LOGS, IF THERE IS A TIME LAG BETWEEN GET_AUDITs 
-# LARGER THAN 3 MINUTES, WHICH WILL LEAD TO ALMOST IMMEDIATE DISCQUALIFICATION, 
-# IF THE ROOT CAUSE IS NOT IDENTIFIED NOR FIXED. 
-# details: https://forum.storj.io/t/auditscore-on-tardigrade-decreased-without-errors/19097/6
-# referencing github issue for the storj project: https://github.com/storj/storj/issues/4995
-# ------------------------------------ 
-
-tmp_auditTimeLags=$(echo -E $(echo "$LOG1H" |
-jq -Rn '
-    reduce (
-        inputs / "\t" |
-        try ( .[4] |= fromjson ) catch empty |
-        select(.[4].Action == "GET_AUDIT") |
-        [
-            ( .[0] | sub("\\.\\d+Z$"; "Z") | strptime("%Y-%m-%dT%H:%M:%SZ") | mktime ),
-            .[3],
-            .[4]."Satellite ID",
-            ( .[4]."Satellite ID" + "." + .[4]."Piece ID" )
-        ]
-    ) as [ $time, $event, $id, $address ] (
-        [{},{}];
-        if $event == "download started"
-        then
-            .[1][$address] = $time
-        else
-            if (.[1] | has($address) | not) or ($time - .[1][$address]) / 60 > 3
-            then
-                .[0][$id] += 1
-            else
-                .
-            end
-        end
-    ) |
-    if .[0] != {} then .[0] else empty end
-'))
-
-# help variable to test, if content is null or not
-[ -n "$tmp_auditTimeLags" ] && tmp_auditTimeLagsFilled=true || tmp_auditTimeLagsFilled=false
-
-[[ "$DEBUG" == "true" ]] && echo "... audit time lags selection: $tmp_auditTimeLags"
-
-
-# =============================================================================
 # CONCATENATE THE PUSH MESSAGE
 # ------------------------------------
 
 #reset DLOG
 DLOG=""
+
+# only send disk usage and current earnings yes/no
+if [[ "$current_earnings_only" == "false" ]]; then
 
 if [[ $tmp_fatal_errors -eq 0 ]] && [[ $tmp_io_errors -eq $tmp_rest_of_errors ]] && [[ $tmp_audits_failed -eq 0 ]] && [[ $temp_severe_errors -eq 0 ]] && [[ $tmp_reps_failed -eq 0 ]] && [[ "$tmp_auditTimeLagsFilled" == "false" ]]; then 
 	DLOG="$DLOG [$NODE] : hdd $tmp_disk_gross"
@@ -955,6 +974,19 @@ if [[ "$storj_newer_version" == "true" ]] ; then
     DLOG="$DLOG \n.. new version : $storj_version_current > $storj_version_latest" #  [$storj_version_date]
 fi
 
+else 
+
+    # only send disk usage and current earnings
+    DLOG="$DLOG [$NODE] : hdd $tmp_disk_gross"
+    if [[ "$include_current_earnings" == "true" ]] ; then
+        tmp_estimatedPayoutTotalString=$(printf '%.2f\n' $(echo -e "$tmp_payDiff" | awk '{print ( $1 * 1 ) / 100}'))\$
+        tmp_estimatedPayoutTodayString=$(printf '%.2f\n' $(echo -e "$tmp_estimatedPayoutTotal" | awk '{print ( $1 * 1 ) / 100}'))\$
+        DLOG="$DLOG | d: $tmp_estimatedPayoutTotalString | m: $tmp_estimatedPayoutTodayString";
+        [[ "$tmp_payComplete" == "false" ]] && DLOG="$DLOG (!)";
+    fi
+
+fi
+
 
 # =============================================================================
 # SEND THE PUSH MESSAGE TO DISCORD
@@ -965,57 +997,72 @@ cd $DIR
 if [[ "$DISCORDON" == "true" ]]; then
 # send discord push
 
-if [ $tmp_fatal_errors -ne 0 -o $tmp_io_errors -ne $tmp_rest_of_errors -o \
-     $tmp_audits_failed -ne 0 -o $temp_severe_errors -ne 0 -o \
-     \( $get_repair_started -ne 0 -a $get_repair_ratio_int -lt 95 \) -o \
-     $tmp_reps_failed -ne 0 -o $get_ratio_int -lt 90 -o $put_ratio_int -lt 90 -o \
-     "$tmp_no_getput_1h" == "true" -o "$SENDPUSH" == "true" -o "$tmp_auditTimeLagsFilled" == "true" -o \
-     \( $tmp_todayHour -eq 23 -a $tmp_todayMinutes -ge 50 -a $tmp_todayMinutes -le 59 \) ]; then 
-    { ./discord.sh --webhook-url="$DISCORDURL" --username "health check" --text "$DLOG"; } 2>/dev/null
-    [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent: $DLOG"
-fi
-# separated satellites push from errors, occured last $LOGMIN - as scores last "longer"
-# and push frequency limited by $satellite_notification anyway
-if [ ! -z "$satellite_scores" ] && [[ "$satellite_notification" == "true" ]] && [[ "$DISCORDON" == "true" ]]
-then
-    { ./discord.sh --webhook-url="$DISCORDURL" --username "satellites warning" --text "[$NODE]: $satellite_scores"; } 2>/dev/null
-    [[ "$VERBOSE" == "true" ]] && echo " *** discord satellite push sent: $DLOG"
-fi
-# in case of discord debug mode is on, also send success statistics
-# in case discord is configured and it is "end of the day", send push anyway as a summary
-[[ "$DEBUG" == "true" ]] && echo "... push message sending: sendpush: $SENDPUSH, discordon: $DISCORDON, hour: $tmp_todayHour, minutes: $tmp_todayMinutes, details: $DETAILEDSUCCESSRATES";
-if [ \( "$SENDPUSH" == "true" -a "$DISCORDON" == "true" \) ]
-then
-    if [[ "$DETAILEDSUCCESSRATES" == "false" ]]; then
-        tmp_audits="";
-        tmp_downloads="";
-        tmp_uploads="";
-        tmp_downReps="";
-        tmp_upReps="";
-        tmp_count=0;
-        
-        [[ "$audit_successrate" != "100%" ]] && tmp_audits="\n.. audits (r: $audit_recfailrate, c: $audit_failrate, s: $audit_successrate)" && ((tmp_count=tmp_count+1));
-        [[ $get_ratio_int -lt 98 ]] && tmp_downloads="\n.. downloads (c: $dl_canratio, f: $dl_failratio, s: $get_ratio_int%)" && ((tmp_count=tmp_count+1));
-        [[ $put_ratio_int -lt 98 ]] && tmp_uploads="\n.. uploads (c: $put_cancel_ratio, f: $put_fail_ratio, s: $put_ratio_int%)" && ((tmp_count=tmp_count+1));
-        [[ $get_repair_ratio_int -lt 100 ]] && tmp_downReps="\n.. rep down (c: $get_repair_canratio, f: $get_repair_failratio, s: $get_repair_ratio_int%)" && ((tmp_count=tmp_count+1));
-        [[ $put_repair_ratio_int -lt 100 ]] && tmp_putReps="\n.. rep up (c: $put_repair_canratio, f: $put_repair_failratio, s: $put_repair_ratio_int%)" && ((tmp_count=tmp_count+1));
-        
-        # only send push message, in case some scores are below 98%
-        if [[ $tmp_count -gt 0 ]]; then
-            tmp_fullString="[$NODE]";
-            [[ "$tmp_audits" != "" ]] && tmp_fullString="$tmp_fullString $tmp_audits";
-            [[ "$tmp_downloads" != "" ]] && tmp_fullString="$tmp_fullString $tmp_downloads";
-            [[ "$tmp_uploads" != "" ]] && tmp_fullString="$tmp_fullString $tmp_uploads";
-            [[ "$tmp_downReps" != "" ]] && tmp_fullString="$tmp_fullString $tmp_downReps";
-            [[ "$tmp_upReps" != "" ]] && tmp_fullString="$tmp_fullString $tmp_upReps";
-            { ./discord.sh --webhook-url="$DISCORDURL" --username "one-day stats" --text "$tmp_fullString"; } 2>/dev/null
+    # only send disk usage and current earnings yes/no
+    if [[ "$current_earnings_only" == "false" ]]; then
+
+        if [ $tmp_fatal_errors -ne 0 -o $tmp_io_errors -ne $tmp_rest_of_errors -o \
+            $tmp_audits_failed -ne 0 -o $temp_severe_errors -ne 0 -o \
+            \( $get_repair_started -ne 0 -a $get_repair_ratio_int -lt 95 \) -o \
+            $tmp_reps_failed -ne 0 -o $get_ratio_int -lt 90 -o $put_ratio_int -lt 90 -o \
+            "$tmp_no_getput_1h" == "true" -o "$SENDPUSH" == "true" -o "$tmp_auditTimeLagsFilled" == "true"]; then 
+
+                { ./discord.sh --webhook-url="$DISCORDURL" --username "health check" --text "$DLOG"; } 2>/dev/null
+                [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent: $DLOG"
         fi
+
+        # separated satellites push from errors, occured last $LOGMIN - as scores last "longer"
+        # and push frequency limited by $satellite_notification anyway
+        if [ ! -z "$satellite_scores" ] && [[ "$satellite_notification" == "true" ]]; then
+            { ./discord.sh --webhook-url="$DISCORDURL" --username "satellites warning" --text "[$NODE]: $satellite_scores"; } 2>/dev/null
+            [[ "$VERBOSE" == "true" ]] && echo " *** discord satellite push sent: $DLOG"
+        fi
+
+        # in case of discord debug mode is on, also send success statistics
+        # in case discord is configured and it is "end of the day", send push anyway as a summary
+        [[ "$DEBUG" == "true" ]] && echo "... push message sending: sendpush: $SENDPUSH, discordon: $DISCORDON, hour: $tmp_todayHour, minutes: $tmp_todayMinutes, details: $DETAILEDSUCCESSRATES";
+
+
+        if [[ "$DETAILEDSUCCESSRATES" == "false" ]]; then
+            tmp_audits="";
+            tmp_downloads="";
+            tmp_uploads="";
+            tmp_downReps="";
+            tmp_upReps="";
+            tmp_count=0;
         
-    else
-        { ./discord.sh --webhook-url="$DISCORDURL" --username "one-day stats" --text "[$NODE]\n.. audits (r: $audit_recfailrate, c: $audit_failrate, s: $audit_successrate)\n.. downloads (c: $dl_canratio, f: $dl_failratio, s: $get_ratio_int%)\n.. uploads (c: $put_cancel_ratio, f: $put_fail_ratio, s: $put_ratio_int%)\n.. rep down (c: $get_repair_canratio, f: $get_repair_failratio, s: $get_repair_ratio_int%)\n.. rep up (c: $put_repair_canratio, f: $put_repair_failratio, s: $put_repair_ratio_int%)"; } 2>/dev/null
+            [[ "$audit_successrate" != "100%" ]] && tmp_audits="\n.. audits (r: $audit_recfailrate, c: $audit_failrate, s: $audit_successrate)" && ((tmp_count=tmp_count+1));
+            [[ $get_ratio_int -lt 98 ]] && tmp_downloads="\n.. downloads (c: $dl_canratio, f: $dl_failratio, s: $get_ratio_int%)" && ((tmp_count=tmp_count+1));
+            [[ $put_ratio_int -lt 98 ]] && tmp_uploads="\n.. uploads (c: $put_cancel_ratio, f: $put_fail_ratio, s: $put_ratio_int%)" && ((tmp_count=tmp_count+1));
+            [[ $get_repair_ratio_int -lt 100 ]] && tmp_downReps="\n.. rep down (c: $get_repair_canratio, f: $get_repair_failratio, s: $get_repair_ratio_int%)" && ((tmp_count=tmp_count+1));
+            [[ $put_repair_ratio_int -lt 100 ]] && tmp_putReps="\n.. rep up (c: $put_repair_canratio, f: $put_repair_failratio, s: $put_repair_ratio_int%)" && ((tmp_count=tmp_count+1));
+        
+            # only send push message, in case some scores are below 98%
+            if [[ $tmp_count -gt 0 ]]; then
+                tmp_fullString="[$NODE]";
+                [[ "$tmp_audits" != "" ]] && tmp_fullString="$tmp_fullString $tmp_audits";
+                [[ "$tmp_downloads" != "" ]] && tmp_fullString="$tmp_fullString $tmp_downloads";
+                [[ "$tmp_uploads" != "" ]] && tmp_fullString="$tmp_fullString $tmp_uploads";
+                [[ "$tmp_downReps" != "" ]] && tmp_fullString="$tmp_fullString $tmp_downReps";
+                [[ "$tmp_upReps" != "" ]] && tmp_fullString="$tmp_fullString $tmp_upReps";
+                if [[ "$SENDPUSH" == "true" ]]; then
+                    { ./discord.sh --webhook-url="$DISCORDURL" --username "one-day stats" --text "$tmp_fullString"; } 2>/dev/null
+                    [[ "$VERBOSE" == "true" ]] && echo " *** discord success rates push sent."
+                fi
+            else
+                [[ "$VERBOSE" == "true" ]] && echo " *** no discord success rates to be sent."
+            fi
+        
+        elif [[ "$SENDPUSH" == "true" ]]; then
+            { ./discord.sh --webhook-url="$DISCORDURL" --username "one-day stats" --text "[$NODE]\n.. audits (r: $audit_recfailrate, c: $audit_failrate, s: $audit_successrate)\n.. downloads (c: $dl_canratio, f: $dl_failratio, s: $get_ratio_int%)\n.. uploads (c: $put_cancel_ratio, f: $put_fail_ratio, s: $put_ratio_int%)\n.. rep down (c: $get_repair_canratio, f: $get_repair_failratio, s: $get_repair_ratio_int%)\n.. rep up (c: $put_repair_canratio, f: $put_repair_failratio, s: $put_repair_ratio_int%)"; } 2>/dev/null
+            [[ "$VERBOSE" == "true" ]] && echo " *** discord success rates push sent."
+        fi
+  
+
+    elif [[ "$SENDPUSH" == "true" ]]; then
+        # only send disk usage and estimated earnings
+        { ./discord.sh --webhook-url="$DISCORDURL" --username "current earnings" --text "$DLOG"; } 2>/dev/null
+        [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent: $DLOG"
     fi
-    [[ "$VERBOSE" == "true" ]] && echo " *** discord success rates push sent."
-fi
 fi
 
 
@@ -1024,7 +1071,7 @@ fi
 # ------------------------------------
 
 # send email alerts
-if [[ "$MAILON" == "true" ]]; then
+if [[ "$MAILON" == "true" ]] && [[ "$current_earnings_only" == "false" ]]; then
 
 if [ ! -z "$satellite_scores" ] && [[ "$satellite_notification" == "true" ]]; then
     swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : SATELLITE SCORES BELOW THRESHOLD" --body "$satellite_scores" --silent "1"
