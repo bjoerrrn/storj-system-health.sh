@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.9.3
+# v1.9.4
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -237,16 +237,6 @@ else
         satellite_notification=true  # do perform the satellite notification
         updateSettings "${settings_satellite_key}" "${settings_satellite_timestamp}" # set current date
     fi
-    
-    # compare, if dates are equal or not
-    # if unequal, perform satellite notification, else not
-    difference=$(($settings_satellite_timestamp-$satping))
-    if [[ $difference -gt $SATPINGFREQ ]]
-    then
-        satellite_notification=true  # do perform the satellite notification
-        updateSettings "${settings_satellite_key}" "${settings_satellite_timestamp}" # replace old date with current date
-    fi
-    [[ "$VERBOSE" == "true" ]] && echo " *** settings: satellite pings will be sent: $satellite_notification"
 fi 
 
 
@@ -344,6 +334,20 @@ then
     echo " *** satellite scores url   : $node_url/api/sno/satellites -> not OK"
     echo "warning : satellite scores not available, please verify access."
 fi
+[[ "$DEBUG" == "true" ]] && echo "... satellite scores: $satellite_scores"
+
+# compare, if dates are equal or not
+# if unequal, perform satellite notification, else not
+difference=$(($settings_satellite_timestamp-$satping))
+[[ "$DEBUG" == "true" ]] && echo "... satping difference: $difference ($settings_satellite_timestamp - $satping) / freq: $SATPINGFREQ"
+# only reset satping value in case satping has 
+if [[ $difference -gt $SATPINGFREQ ]] && [ ! -z "$satellite_scores" ]
+then
+    satellite_notification=true  # do perform the satellite notification
+    updateSettings "${settings_satellite_key}" "${settings_satellite_timestamp}" # replace old date with current date
+fi
+[[ "$VERBOSE" == "true" ]] && echo " *** settings: satellite pings will be sent: $satellite_notification"
+
 
 
 # CHECK STORJ VERSION
