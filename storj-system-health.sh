@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.9.4
+# v1.9.5
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -868,7 +868,7 @@ fi # // end of if clause for skipping docker logs analysis
         if [[ $tmp_payDateDay -ne $tmp_todayDay ]]; then 
             tmp_payValid=true;
             [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_payValid=$tmp_payValid"
-            # if payDate timestamp between 23:45:00 and 23:59:59 (hh:mm:ss); then payComplete = true; else payComplete = false;
+            # if payDate timestamp between 23:50:00 and 23:59:59 (hh:mm:ss); then payComplete = true; else payComplete = false;
             [[ $tmp_payDateHour -eq 23 ]] && [[ $tmp_payDateMinutes -ge 50 ]] && [[ $tmp_payDateMinutes -le 59 ]] && tmp_payComplete=true;
             [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_payComplete=$tmp_payComplete"
         fi
@@ -891,16 +891,22 @@ fi # // end of if clause for skipping docker logs analysis
         [[ "$DEBUG" == "true" ]] && echo "... settings : tmp_payDiff=$tmp_payDiff"
         
         # pay data and last timestamp valid and current timestamp at the end of the current day, then store new values
-        if [[ "$tmp_payValid" == "true" &&  "$tmp_payComplete" == "true" ]]; then
-            if [[ $tmp_todayHour -eq 23 && $tmp_todayMinutes -ge 50 && $tmp_todayMinutes -le 59 ]]; then
+        if [[ $tmp_todayHour -eq 23 && $tmp_todayMinutes -ge 50 && $tmp_todayMinutes -le 59 ]]; then
+            if [[ "$tmp_payValid" == "true" &&  "$tmp_payComplete" == "true" ]]; then
                 # set payValue = estimatedPayoutTotal --> persistent storage !!
                 updateSettings "${NODE}_payValue" "$tmp_estimatedPayoutTotal";
                 # set payDate  = timestamp            --> persistent storage !!
+                updateSettings "${NODE}_payTimestamp" "$tmp_timestamp";
+            elif [[ "$tmp_payValid" == "true" &&  "$tmp_payComplete" == "false" && settings["${NODE}_payValue"] == "0" ]]; then
+                # in case of new nodes added to the settings with initial setup during the day, 
+                # the timestamp update will fix the 'complete' checks and calculations on the first evening.
+                # note: this is not a full solution, but values will be correct from the second day onwards.
                 updateSettings "${NODE}_payTimestamp" "$tmp_timestamp";
             fi # // end of store new values if clause
             
         fi # // end of payout estimation if clause
     fi # // end of $settings_file readable if clause
+    
 
 
 # =============================================================================
@@ -1008,7 +1014,7 @@ if [[ "$DISCORDON" == "true" ]]; then
             $tmp_audits_failed -ne 0 -o $temp_severe_errors -ne 0 -o \
             \( $get_repair_started -ne 0 -a $get_repair_ratio_int -lt 95 \) -o \
             $tmp_reps_failed -ne 0 -o $get_ratio_int -lt 90 -o $put_ratio_int -lt 90 -o \
-            "$tmp_no_getput_1h" == "true" -o "$SENDPUSH" == "true" -o "$tmp_auditTimeLagsFilled" == "true"]; then 
+            "$tmp_no_getput_1h" == "true" -o "$SENDPUSH" == "true" -o "$tmp_auditTimeLagsFilled" == "true" ]; then 
 
                 { ./discord.sh --webhook-url="$DISCORDURL" --username "health check" --text "$DLOG"; } 2>/dev/null
                 [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent: $DLOG"
