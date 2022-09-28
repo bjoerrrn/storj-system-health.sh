@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.9.5
+# v1.9.6
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -478,7 +478,7 @@ audit_difference=0
 [[ "$VERBOSE" == "true" ]] && INFO="$(echo "$LOG1H" 2>&1 | grep 'INFO')"
 AUDS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT' | grep 'failed')"
 FATS="$(echo "$LOG1H" 2>&1 | grep 'FATAL' | grep -v 'INFO')"
-ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'INFO' -e 'FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity' -e 'connection reset by peer' -e 'context canceled')"
+ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'INFO' -e 'FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity' -e 'connection reset by peer' -e 'context canceled' -e 'tcp connector failed')"
 DREPS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_REPAIR' | grep 'failed')"
 
 # added "severe" errors in order to recognize e.g. docker issues, connectivity issues etc.
@@ -493,7 +493,7 @@ tmp_fatal_errors="$(echo "$FATS" 2>&1 | grep 'FATAL' -c)"
 tmp_audits_failed="$(echo "$AUDS" 2>&1 | grep -E 'GET_AUDIT' | grep 'failed' -c)"
 tmp_reps_failed="$(echo "$DREPS" 2>&1 | grep 'failed' -c)"
 tmp_rest_of_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' -c)"
-tmp_io_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' | grep -e 'timeout' -e 'connection reset' -c)"
+tmp_io_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' | grep -e 'timeout' -e 'connection reset' -e 'tcp connector failed' -c)"
 temp_severe_errors="$(echo "$SEVERE" 2>&1 | grep -i -e 'error:' -e 'fatal:' -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -e 'Unable to read the disk' -e 'software caused connection abort' -c)"
 
 [[ "$VERBOSE" == "true" ]] && echo " *** info count             : #$tmp_info"
