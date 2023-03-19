@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.9.7
+# v1.9.9
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -559,7 +559,7 @@ dl_success=$(echo "$LOG1D" 2>&1 | grep '"GET"' | grep 'downloaded' -c)
 #canceled Downloads from your node
 dl_canceled=$(echo "$LOG1D" 2>&1 | grep '"GET"' | grep 'download canceled' -c)
 #Failed Downloads from your node
-dl_failed=$(echo "$LOG1D" 2>&1 | grep '"GET"' | grep 'download failed' -c)
+dl_failed=$(echo "$LOG1D" 2>&1 | grep '"GET"' | grep 'download failed' | grep -v 'noiseconn' -c)
 #Ratio of canceled Downloads
 if [ $(($dl_success+$dl_failed+$dl_canceled)) -ge 1 ]
 then
