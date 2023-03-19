@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.9.9
+# v1.10.0
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -112,6 +112,41 @@ function initSettings() {
     echo "$settings_satellite_key=$settings_satellite_timestamp" > $settings_file
     [[ "$VERBOSE" == "true" ]] && echo " *** settings: latest satellite ping saved [$(date +'%d.%m.%Y %H:%M')]."
     # .. other values to be appended with >> instead of > !
+}
+
+function vercomp () {
+    if [[ $1 == $2 ]]
+    then
+        [[ "$VERBOSE" == "true" ]] && [[ "$DEBUG" == "true" ]] && echo "... storj versions equal"
+        return 0
+    fi
+    [[ "$VERBOSE" == "true" ]] && [[ "$DEBUG" == "true" ]] && echo "... storj versions unequal"
+    local IFS=.
+    local i ver1=($1) ver2=($2)
+    # fill empty fields in ver1 with zeros
+    for ((i=${#ver1[@]}; i<${#ver2[@]}; i++))
+    do
+        ver1[i]=0
+    done
+    for ((i=0; i<${#ver1[@]}; i++))
+    do
+        if [[ -z ${ver2[i]} ]]
+        then
+            # fill empty fields in ver2 with zeros
+            ver2[i]=0
+        fi
+        if ((10#${ver1[i]} > 10#${ver2[i]}))
+        then
+            [[ "$VERBOSE" == "true" ]] && [[ "$DEBUG" == "true" ]] && echo "... storj versions: current larger"
+            return 1
+        fi
+        if ((10#${ver1[i]} < 10#${ver2[i]}))
+        then
+            [[ "$VERBOSE" == "true" ]] && [[ "$DEBUG" == "true" ]] && echo "... storj versions: current smaller"
+            return 2
+        fi
+    done
+    return 0
 }
 
 # =============================================================================
@@ -381,10 +416,21 @@ then
     [[ "$VERBOSE" == "true" ]] && echo " *** storj node api url     : $node_url/api/sno (OK)"
     [[ "$VERBOSE" == "true" ]] && echo " *** storj version current  : installed $storj_version_current"
     [[ "$VERBOSE" == "true" ]] && echo " *** storj version latest   : github $storj_version_latest [$RELEASEDATE]"
-    if [[ "$storj_version_current" != "$storj_version_latest" ]] && [[ $RELEASEDIFF -gt 10 ]]
+    if [[ $RELEASEDIFF -gt 10 ]]
     then 
-        storj_newer_version=true
-        echo "warning : there is a newer version of storj available."
+        if [[ "$storj_version_current" != "$storj_version_latest" ]]
+        then
+            vercomp $storj_version_current $storj_version_latest
+            case $? in
+                0) op=0;;
+                1) op=1;;
+                2) op=2;;
+            esac
+            if [[ $op -eq 2 ]]
+            then
+                echo "warning : there is a newer version of storj available."
+            fi
+        fi
     fi
 else
     echo " *** node api url           : $node_url/api/sno -> not OK"
