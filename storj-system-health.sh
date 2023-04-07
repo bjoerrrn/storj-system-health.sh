@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.10.1
+# v1.10.2
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -1022,7 +1022,7 @@ if [[ $gets_recent_hour -eq 0 ]] && [[ $puts_recent_hour -eq 0 ]]; then
 	DLOG="$DLOG \n.. warning !! no get/put in last $LOGMINm"
 fi
 
-if [[ $get_ratio_int -lt 80 ]] || [[ $put_ratio_int -lt 90 ]]; then
+if [[ $get_ratio_int -lt 60 ]] || [[ $put_ratio_int -lt 90 ]]; then
 	DLOG="$DLOG \n.. warning !! ↓ $get_ratio_int / ↑ $put_ratio_int low"
 fi
 
@@ -1059,7 +1059,7 @@ if [[ "$DISCORDON" == "true" ]]; then
         if [ $tmp_fatal_errors -ne 0 -o $tmp_io_errors -ne $tmp_rest_of_errors -o \
             $tmp_audits_failed -ne 0 -o $temp_severe_errors -ne 0 -o \
             \( $get_repair_started -ne 0 -a $get_repair_ratio_int -lt 95 \) -o \
-            $tmp_reps_failed -ne 0 -o $get_ratio_int -lt 80 -o $put_ratio_int -lt 90 -o \
+            $tmp_reps_failed -ne 0 -o $get_ratio_int -lt 60 -o $put_ratio_int -lt 90 -o \
             "$tmp_no_getput_1h" == "true" -o "$SENDPUSH" == "true" -o "$tmp_auditTimeLagsFilled" == "true" ]; then 
 
                 { ./discord.sh --webhook-url="$DISCORDURL" --username "health check" --text "$DLOG"; } 2>/dev/null
