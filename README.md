@@ -141,7 +141,7 @@ it also supports a help command for further details:
 ## automation with crontab
 to let the health check run automatically, here’s a crontab example for linux, which runs the script each hour.
 ```
-15,35,55  * * * *   pi      /home/pi/storj-checks.sh -d  > /dev/null
+15,35,55  * * * *   pi      /home/pi/storj-system-health.sh -d  > /dev/null
 ```
 
 for macos please be aware of the following specifics:
