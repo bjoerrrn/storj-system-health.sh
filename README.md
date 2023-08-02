@@ -153,11 +153,11 @@ for macos please be aware of the following specifics:
 SHELL=/bin/sh
 PATH="/opt/homebrew/opt/sqlite/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 # UNIX:
-30 *    * * *   pi      cd /home/pi/scripts/ && ./checks.sh
-59 1    * * *   pi      cd /home/pi/scripts/ && ./checks.sh -Ed
+30 *    * * *   pi      cd /home/pi/scripts/ && ./storj-system-health.sh
+59 1    * * *   pi      cd /home/pi/scripts/ && ./storj-system-health.sh -Ed
 # MACOS
-# 30    * * * *  /Users/me/checks.sh >> /Users/me/Desktop/checks.txt 2>&1
-# 59    1 * * *  /Users/me/checks.sh -Ed -c /Users/me/my.credo >> /Users/me/Desktop/checks.txt 2>&1
+# 30    * * * *  /Users/me/storj-system-health.sh >> /Users/me/Desktop/checks.txt 2>&1
+# 59    1 * * *  /Users/me/storj-system-health.sh -Ed -c /Users/me/my.credo >> /Users/me/Desktop/checks.txt 2>&1
 ```
 
 ## example screenshots
