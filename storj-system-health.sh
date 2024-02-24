@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.10.5
+# v1.10.6
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -978,15 +978,15 @@ else
 fi
 
 if [[ "$tmp_auditTimeLagsFilled" == "true" ]]; then
-	DLOG="$DLOG audit issues: download started/finished time lags > disqualification risk!"
+	DLOG="$DLOG audit issues: download started/finished time lags"
 fi
 
 if [[ $tmp_audits_failed -ne 0 ]]; then
-	DLOG="$DLOG audit issues: $tmp_audits_failed = $audit_failed_warn recoverable ($audit_recfailrate) + $audit_failed_crit critical ($audit_failrate)"
+	DLOG="$DLOG audit issues: $tmp_audits_failed // $audit_failed_warn recoverable + $audit_failed_crit critical"
 fi
 
 if [[ $tmp_reps_failed -ne 0 ]]; then
-	DLOG="$DLOG repair issues: $get_repair_failed down ($get_repair_failratio)"
+	DLOG="$DLOG // repair issues: $get_repair_failed"
 fi
 
 if [[ $audit_difference -gt 1 ]]; then
@@ -1197,7 +1197,7 @@ fi
 
 # if there are pending audits, run the script for the specific node a second time after 5 mins
 if [[ $audit_difference -gt 0 ]] && [[ "$audit_difference_repeat" == "true" ]]; then
-    i=$((i-1))                         # repeat the loop with current i value
+    i=$((i-1))                           # repeat the loop with current i value
     sleep 5m                             # sleep for 5mins to allow audits to be finalized
 fi
 
