@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.10.6
+# v1.10.7
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -343,7 +343,12 @@ tmp_disk_usage="$(((space_used*100)/(space_total))).$(((space_used*10000)/(space
 tmp_disk_gross="$((((space_used+space_trash)*100)/(space_total))).$((((space_used+space_trash)*10000)/(space_total)-((((space_used+space_trash)*100)/(space_total))*100)))%"
 [[ "$VERBOSE" == "true" ]] && echo " *** disk usage             : $tmp_disk_usage (incl. trash: $tmp_disk_gross)"
 tmp_overused_warning=false
-[[ "$VERBOSE" == "true" ]] && [[ $space_overused -gt 0 ]] && echo "warning: space overused is greater than zero!" && $tmp_overused_warning=true
+if [[ $space_overused -gt 0 ]]; then 
+    if [[ "$VERBOSE" == "true" ]]; then 
+        echo "warning: space overused is greater than zero!"
+    fi
+    tmp_overused_warning=true
+fi
 
 
 # CHECK SATELLITE SCORES
@@ -743,7 +748,7 @@ gets_recent_hour=$(echo "$LOG1H" 2>&1 | grep '"GET"' -c)
 puts_recent_hour=$(echo "$LOG1H" 2>&1 | grep '"PUT"' -c)
 tmp_no_getput_1h=false
 [[ $gets_recent_hour -eq 0 ]] && tmp_no_getput_1h=true
-[[ $puts_recent_hour -eq 0 ]] && tmp_no_getput_1h=true
+[[ $puts_recent_hour -eq 0 ]] && [[ $space_overused -eq 0 ]] && tmp_no_getput_1h=true
 tmp_no_getput_ok="OK"
 [[ "$tmp_no_getput_1h" == "true" ]] && tmp_no_getput_ok="NOK"
 [[ "$VERBOSE" == "true" ]] && echo " *** $LOGMIN m activity : up: $gets_recent_hour / down: $puts_recent_hour > $tmp_no_getput_ok"
@@ -1051,6 +1056,7 @@ fi
 cd $DIR
 
 if [[ "$DISCORDON" == "true" ]]; then
+[[ "$VERBOSE" == "true" ]] && echo " *** discord summary push to be sent: $SENDPUSH"
 # send discord push
 
     # only send disk usage and current earnings yes/no
@@ -1063,7 +1069,7 @@ if [[ "$DISCORDON" == "true" ]]; then
             "$tmp_no_getput_1h" == "true" -o "$SENDPUSH" == "true" -o "$tmp_auditTimeLagsFilled" == "true" ]; then 
 
                 { ./discord.sh --webhook-url="$DISCORDURL" --username "health check" --text "$DLOG"; } 2>/dev/null
-                [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent: $DLOG"
+                [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent : $DLOG"
         fi
 
         # separated satellites push from errors, occured last $LOGMIN - as scores last "longer"
@@ -1117,7 +1123,7 @@ if [[ "$DISCORDON" == "true" ]]; then
     elif [[ "$SENDPUSH" == "true" ]]; then
         # only send disk usage and estimated earnings
         { ./discord.sh --webhook-url="$DISCORDURL" --username "current earnings" --text "$DLOG"; } 2>/dev/null
-        [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent: $DLOG"
+        [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent : $DLOG"
     fi
 fi
 
