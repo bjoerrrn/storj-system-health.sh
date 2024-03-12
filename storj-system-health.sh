@@ -751,7 +751,7 @@ tmp_no_getput_1h=false
 [[ $puts_recent_hour -eq 0 ]] && [[ $space_overused -eq 0 ]] && tmp_no_getput_1h=true
 tmp_no_getput_ok="OK"
 [[ "$tmp_no_getput_1h" == "true" ]] && tmp_no_getput_ok="NOK"
-[[ "$VERBOSE" == "true" ]] && echo " *** $LOGMIN m activity : up: $gets_recent_hour / down: $puts_recent_hour > $tmp_no_getput_ok"
+[[ "$VERBOSE" == "true" ]] && echo " *** $LOGMIN m activity : down: $gets_recent_hour / up: $puts_recent_hour > $tmp_no_getput_ok"
 
 
 # ignore i/o timeouts (satellite service pings + single satellite connects), if audit success rate is 100% and there are no other errors as well
