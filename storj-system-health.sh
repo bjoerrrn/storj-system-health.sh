@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.10.7
+# v1.10.8
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -341,6 +341,12 @@ space_trash=$(echo -E $(curl -s "$node_url/api/sno/" | jq '.diskSpace.trash'))
 space_overused=$(echo -E $(curl -s "$node_url/api/sno/" | jq '.diskSpace.overused'))
 tmp_disk_usage="$(((space_used*100)/(space_total))).$(((space_used*10000)/(space_total)-(((space_used*100)/(space_total))*100)))%"
 tmp_disk_gross="$((((space_used+space_trash)*100)/(space_total))).$((((space_used+space_trash)*10000)/(space_total)-((((space_used+space_trash)*100)/(space_total))*100)))%"
+
+tmp_disk_full=false
+if [[ $(((($space_used+$space_trash)*100)/($space_total))) -ge 99 ]]; then
+    tmp_disk_full=true
+fi
+
 [[ "$VERBOSE" == "true" ]] && echo " *** disk usage             : $tmp_disk_usage (incl. trash: $tmp_disk_gross)"
 tmp_overused_warning=false
 if [[ $space_overused -gt 0 ]]; then 
@@ -748,7 +754,7 @@ gets_recent_hour=$(echo "$LOG1H" 2>&1 | grep '"GET"' -c)
 puts_recent_hour=$(echo "$LOG1H" 2>&1 | grep '"PUT"' -c)
 tmp_no_getput_1h=false
 [[ $gets_recent_hour -eq 0 ]] && tmp_no_getput_1h=true
-[[ $puts_recent_hour -eq 0 ]] && [[ $space_overused -eq 0 ]] && tmp_no_getput_1h=true
+[[ $puts_recent_hour -eq 0 ]] && [[ "$tmp_disk_full" == "false" ]] && tmp_no_getput_1h=true
 tmp_no_getput_ok="OK"
 [[ "$tmp_no_getput_1h" == "true" ]] && tmp_no_getput_ok="NOK"
 [[ "$VERBOSE" == "true" ]] && echo " *** $LOGMIN m activity : down: $gets_recent_hour / up: $puts_recent_hour > $tmp_no_getput_ok"
@@ -1027,7 +1033,7 @@ if [[ $gets_recent_hour -eq 0 ]] && [[ $puts_recent_hour -eq 0 ]]; then
 	DLOG="$DLOG \n.. warning !! no get/put in last $LOGMINm"
 fi
 
-if [[ $get_ratio_int -lt 60 ]] || [[ $put_ratio_int -lt 60 ]]; then
+if [ $get_ratio_int -lt 60 -o \( $put_ratio_int -lt 60 -a "$tmp_disk_full" == "false" \) ]; then
 	DLOG="$DLOG \n.. warning !! ↓ $get_ratio_int / ↑ $put_ratio_int low"
 fi
 
@@ -1065,8 +1071,9 @@ if [[ "$DISCORDON" == "true" ]]; then
         if [ $tmp_fatal_errors -ne 0 -o $tmp_io_errors -ne $tmp_rest_of_errors -o \
             $tmp_audits_failed -ne 0 -o $temp_severe_errors -ne 0 -o \
             \( $get_repair_started -ne 0 -a $get_repair_ratio_int -lt 95 \) -o \
-            $tmp_reps_failed -ne 0 -o $get_ratio_int -lt 60 -o $put_ratio_int -lt 60 -o \
-            "$tmp_no_getput_1h" == "true" -o "$SENDPUSH" == "true" -o "$tmp_auditTimeLagsFilled" == "true" ]; then 
+            $tmp_reps_failed -ne 0 -o $get_ratio_int -lt 60 -o \
+            \( $put_ratio_int -lt 60 -a "$tmp_disk_full" == "false" \) -o \
+            "$tmp_no_getput_1h" == "true" -o "$SENDPUSH" == "true" -o "$tmp_auditTimeLagsFilled" == "true" ]; then
 
                 { ./discord.sh --webhook-url="$DISCORDURL" --username "health check" --text "$DLOG"; } 2>/dev/null
                 [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent : $DLOG"
