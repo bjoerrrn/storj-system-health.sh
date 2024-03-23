@@ -182,6 +182,18 @@ success rates per node
 
 ![success rates](/examples/discord-example-success-rates.jpg)
 
+explanation: 
+```
+(repair) downloads / (repair) uploads:
+c = cancelled rate
+f = failed rate
+s = success rate
+
+audits : 
+r = recoverable audit rate
+c = critical audit fail rate
+s = audit success rate
+```
 
 ## contributing
 
