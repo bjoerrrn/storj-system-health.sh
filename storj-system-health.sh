@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.10.12
+# v1.10.13
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -1211,6 +1211,7 @@ fi
 # if there are pending audits, run the script for the specific node a second time after 5 mins
 if [[ $audit_difference -gt 0 ]] && [[ "$audit_difference_repeat" == "true" ]]; then
     i=$((i-1))                           # repeat the loop with current i value
+    [[ "$VERBOSE" == "true" ]] && echo " *** due to pending audits, running the script in 5m automatically again."
     sleep 5m                             # sleep for 5mins to allow audits to be finalized
 fi
 
