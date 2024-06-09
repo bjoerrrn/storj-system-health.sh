@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.10.13
+# v1.10.14
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -366,7 +366,7 @@ satellite_scores=$(echo -E $(curl -s "$node_url/api/sno/satellites" |
 jq -r \
         --argjson auditScore 0.98 \
         --argjson suspensionScore 0.95 \
-        --argjson onlineScore 0.90 \
+        --argjson onlineScore 0.85 \
         '.audits[] as $a | ($a.satelliteName | sub(":.*";"")) as $name |
         reduce ($ARGS.named|keys[]) as $key (
                 [];
@@ -1000,9 +1000,9 @@ if [[ $tmp_reps_failed -ne 0 ]]; then
 	DLOG="$DLOG repair issues: $get_repair_failed"
 fi
 
-if [[ $audit_difference -gt 1 ]]; then
-	DLOG="$DLOG audit warning (pending: $audit_difference)"
-fi
+# if [[ $audit_difference -gt 1 ]]; then
+#	 DLOG="$DLOG audit warning (pending: $audit_difference)"
+# fi
 
 if [[ $temp_severe_errors -ne 0 ]]; then
 	DLOG="$DLOG severe issues ($temp_severe_errors)"
@@ -1130,7 +1130,7 @@ if [[ "$DISCORDON" == "true" ]]; then
     elif [[ "$SENDPUSH" == "true" ]]; then
         # only send disk usage and estimated earnings
         { ./discord.sh --webhook-url="$DISCORDURL" --username "current earnings" --text "$DLOG"; } 2>/dev/null
-        [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent : $DLOG"
+        [[ "$VERBOSE" == "true" ]] && echo " *** discord summary push sent (earnings) : $DLOG"
     fi
 fi
 
@@ -1174,13 +1174,13 @@ if [[ $tmp_audits_failed -ne 0 ]]; then
 	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : AUDIT ERRORS FOUND" --body "Recoverable: $audit_failed_warn / $audit_recfailrate \n\n$audit_failed_warn_text \n\nCritical: $audit_failed_crit / $audit_failrate \n\n$audit_failed_crit_text" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** audit error mail sent."
 fi
-if [[ "$audit_difference_repeat" == "false" ]]; then
+# if [[ "$audit_difference_repeat" == "false" ]]; then
     # only alert when there is a) just one or b) the first run done of the "audit pending loop"
-    if [[ $audit_difference -gt 0 ]]; then 
-	    swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : AUDIT WARNING - pending audits" --body "Warning: there are $audit_difference pending audits, which have not yet been finished." --silent "1"
-	    [[ "$VERBOSE" == "true" ]] && echo " *** pending audit warning mail sent."
-	fi
-fi
+#     if [[ $audit_difference -gt 0 ]]; then 
+# 	    swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : AUDIT WARNING - pending audits" --body "Warning: there are $audit_difference pending audits, which have not yet been finished." --silent "1"
+# 	    [[ "$VERBOSE" == "true" ]] && echo " *** pending audit warning mail sent."
+# 	fi
+# fi
 if [[ $tmp_reps_failed -ne 0 ]]; then 
 	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : REPAIR FAILURES FOUND" --body "$get_repair_failed_text" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** repair failures mail sent."
@@ -1209,10 +1209,10 @@ fi
 
 
 # if there are pending audits, run the script for the specific node a second time after 5 mins
-if [[ $audit_difference -gt 0 ]] && [[ "$audit_difference_repeat" == "true" ]]; then
-    i=$((i-1))                           # repeat the loop with current i value
-    [[ "$VERBOSE" == "true" ]] && echo " *** due to pending audits, running the script in 5m automatically again."
-    sleep 5m                             # sleep for 5mins to allow audits to be finalized
-fi
+# if [[ $audit_difference -gt 0 ]] && [[ "$audit_difference_repeat" == "true" ]]; then
+    # i=$((i-1))                           # repeat the loop with current i value
+    # [[ "$VERBOSE" == "true" ]] && echo " *** due to pending audits, running the script in 5m automatically again."
+    # sleep 5m                             # sleep for 5mins to allow audits to be finalized
+# fi
 
 done # end of storagenodes FOR loop
