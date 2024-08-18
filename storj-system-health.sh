@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.10.14
+# v1.11
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -532,25 +532,27 @@ audit_difference=0
 
 
 # select error messages in detail (partially extracted text log)
-[[ "$VERBOSE" == "true" ]] && INFO="$(echo "$LOG1H" 2>&1 | grep 'INFO')"
-AUDS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT' | grep 'failed')"
-FATS="$(echo "$LOG1H" 2>&1 | grep 'FATAL' | grep -v 'INFO')"
-ERRS="$(echo "$LOG1H" 2>&1 | grep 'ERROR' | grep -v -e 'INFO' -e 'FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity' -e 'connection reset by peer' -e 'context canceled' -e 'tcp connector failed' -e 'node rate limited by id' -e 'manager closed: read tcp' -e 'connection timed out')"
-DREPS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_REPAIR' | grep 'failed')"
+[[ "$VERBOSE" == "true" ]] && INFO="$(echo "$LOG1H" 2>&1 | grep '[[:blank:]]*INFO')"
+AUDS="$(echo "$LOG1H" 2>&1 | grep -E '[[:blank:]]*GET_AUDIT' | grep 'failed')"
+AUDS=$(echo "$AUDS" 2>&1 | grep -v 'read: connection timed out')
+FATS="$(echo "$LOG1H" 2>&1 | grep '[[:blank:]]*FATAL' | grep -v '[[:blank:]]*INFO')"
+ERRS="$(echo "$LOG1H" 2>&1 | grep '[[:blank:]]*ERROR' | grep -v -e '[[:blank:]]*INFO' -e '[[:blank:]]*FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity' -e 'connection reset by peer' -e 'context canceled' -e 'tcp connector failed' -e 'node rate limited by id' -e 'manager closed: read tcp' -e 'connection timed out')"
+DREPS="$(echo "$LOG1H" 2>&1 | grep -E '[[:blank:]]*GET_REPAIR' | grep 'failed')"
+DREPS=$(echo "$DREPS" 2>&1 | grep -v 'connection timed out')
 
 # added "severe" errors in order to recognize e.g. docker issues, connectivity issues etc.
-SEVERE="$(echo "$LOG1H" 2>&1 | grep -i -e 'error:' -e 'fatal:' -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -e 'Unable to read the disk' -e 'software caused connection abort' | grep -v -e 'emptying trash failed' -e 'INFO' -e 'FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity' -e 'failed to settle orders for satellite' -e 'rpc client' -e 'manager closed: read tcp' -e 'connection timed out')"
+SEVERE="$(echo "$LOG1H" 2>&1 | grep -i -e 'error:' -e 'fatal:' -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -e 'Unable to read the disk' -e 'software caused connection abort' | grep -v -e 'emptying trash failed' -e '[[:blank:]]*INFO' -e '[[:blank:]]*FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity' -e 'failed to settle orders for satellite' -e 'rpc client' -e 'manager closed: read tcp' -e 'connection timed out')"
 
 # if selected errors are equal between ERRS / SEVERE, keep just one of them
 [[ "$SEVERE" == "$ERRS" ]] && SEVERE=""
 
 # count errors 
-[[ "$VERBOSE" == "true" ]] && tmp_info="$(echo "$INFO" 2>&1 | grep 'INFO' -c)"
-tmp_fatal_errors="$(echo "$FATS" 2>&1 | grep 'FATAL' -c)"
-tmp_audits_failed="$(echo "$AUDS" 2>&1 | grep -E 'GET_AUDIT' | grep 'failed' -c)"
+[[ "$VERBOSE" == "true" ]] && tmp_info="$(echo "$INFO" 2>&1 | grep '[[:blank:]]*INFO' -c)"
+tmp_fatal_errors="$(echo "$FATS" 2>&1 | grep '[[:blank:]]*FATAL' -c)"
+tmp_audits_failed="$(echo "$AUDS" 2>&1 | grep -E '[[:blank:]]*GET_AUDIT' | grep 'failed' -c)"
 tmp_reps_failed="$(echo "$DREPS" 2>&1 | grep 'failed' -c)"
-tmp_rest_of_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' -c)"
-tmp_io_errors="$(echo "$ERRS" 2>&1 | grep 'ERROR' | grep -e 'timeout' -e 'connection reset' -e 'tcp connector failed' -e 'node rate limited by id' -c)"
+tmp_rest_of_errors="$(echo "$ERRS" 2>&1 | grep '[[:blank:]]*ERROR' -c)" 
+tmp_io_errors="$(echo "$ERRS" 2>&1 | grep '[[:blank:]]*ERROR' | grep -e 'timeout' -e 'connection reset' -e 'tcp connector failed' -e 'node rate limited by id' -c)"
 temp_severe_errors="$(echo "$SEVERE" 2>&1 | grep -i -e 'error:' -e 'fatal:' -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -e 'Unable to read the disk' -e 'software caused connection abort' -c)"
 
 [[ "$VERBOSE" == "true" ]] && echo " *** info count             : #$tmp_info"
