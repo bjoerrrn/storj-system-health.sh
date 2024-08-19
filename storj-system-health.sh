@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.11.1
+# v1.11.2
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -533,15 +533,29 @@ audit_difference=0
 
 # select error messages in detail (partially extracted text log)
 [[ "$VERBOSE" == "true" ]] && INFO="$(echo "$LOG1H" 2>&1 | grep '[[:blank:]]*INFO')"
-AUDS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_AUDIT' | grep 'failed')"
-AUDS=$(echo "$AUDS" 2>&1 | grep -v -e 'connection timed out' -e 'connection reset by peer')
-FATS="$(echo "$LOG1H" 2>&1 | grep '[[:blank:]]*FATAL' | grep -v '[[:blank:]]*INFO')"
-ERRS="$(echo "$LOG1H" 2>&1 | grep '[[:blank:]]*ERROR' | grep -v -e '[[:blank:]]*INFO' -e '[[:blank:]]*FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity' -e 'connection reset by peer' -e 'context canceled' -e 'tcp connector failed' -e 'node rate limited by id' -e 'manager closed: read tcp' -e 'connection timed out')"
-DREPS="$(echo "$LOG1H" 2>&1 | grep -E 'GET_REPAIR' | grep 'failed')"
-DREPS=$(echo "$DREPS" 2>&1 | grep -v -e 'connection timed out' -e 'connection reset by peer')
+AUDS="$(echo "$LOG1H" 2>&1 \
+    | grep -E 'GET_AUDIT' \
+    | grep 'failed' \
+    | grep -v -e 'connection timed out' -e 'connection reset by peer')"
+
+FATS="$(echo "$LOG1H" 2>&1 \
+    | grep '[[:blank:]]*FATAL' \
+    | grep -v -e '[[:blank:]]*INFO' -e '[[:blank:]]*WARN')"
+
+ERRS="$(echo "$LOG1H" 2>&1 \
+    | grep '[[:blank:]]*ERROR' \
+    | grep -v -e '[[:blank:]]*INFO' -e '[[:blank:]]*WARN' -e '[[:blank:]]*FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity' -e 'connection reset by peer' -e 'context canceled' -e 'tcp connector failed' -e 'node rate limited by id' -e 'manager closed: read tcp' -e 'connection timed out')"
+
+DREPS="$(echo "$LOG1H" 2>&1 \
+    | grep -E 'GET_REPAIR' \
+    | grep 'failed' \
+    | grep -v -e 'connection timed out' -e 'connection reset by peer')"
+    
 
 # added "severe" errors in order to recognize e.g. docker issues, connectivity issues etc.
-SEVERE="$(echo "$LOG1H" 2>&1 | grep -i -e 'error:' -e 'fatal:' -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -e 'Unable to read the disk' -e 'software caused connection abort' | grep -v -e 'emptying trash failed' -e '[[:blank:]]*INFO' -e '[[:blank:]]*FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity' -e 'failed to settle orders for satellite' -e 'rpc client' -e 'manager closed: read tcp' -e 'connection timed out')"
+SEVERE="$(echo "$LOG1H" 2>&1 \
+    | grep -i -e 'error:' -e 'fatal:' -e 'unexpected shutdown' -e 'fatal error' -e 'transport endpoint is not connected' -e 'Unable to read the disk' -e 'software caused connection abort' \
+    | grep -v -e 'emptying trash failed' -e '[[:blank:]]*INFO' -e '[[:blank:]]*WARN' -e '[[:blank:]]*FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity' -e 'failed to settle orders for satellite' -e 'rpc client' -e 'manager closed: read tcp' -e 'connection timed out')"
 
 # if selected errors are equal between ERRS / SEVERE, keep just one of them
 [[ "$SEVERE" == "$ERRS" ]] && SEVERE=""
@@ -692,7 +706,7 @@ get_repair_started=$(echo "$LOG1D" 2>&1 | grep GET_REPAIR | grep "download start
 get_repair_success=$(echo "$LOG1D" 2>&1 | grep GET_REPAIR | grep downloaded -c)
 #count of failed downloads of pieces for repair process
 get_repair_failed=$(echo "$LOG1D" 2>&1 | grep GET_REPAIR | grep 'download failed' -c)
-get_repair_failed_text=$(echo "$LOG1H" 2>&1 | grep GET_REPAIR | grep 'download failed')
+# get_repair_failed_text=$(echo "$LOG1H" 2>&1 | grep GET_REPAIR | grep 'download failed')
 #count of canceled downloads of pieces for repair process
 get_repair_canceled=$(echo "$LOG1D" 2>&1 | grep GET_REPAIR | grep 'download canceled' -c)
 #Ratio of Fail GET_REPAIR
@@ -999,7 +1013,7 @@ if [[ $tmp_audits_failed -ne 0 ]]; then
 fi
 
 if [[ $tmp_reps_failed -ne 0 ]]; then
-	DLOG="$DLOG repair issues: $get_repair_failed"
+	DLOG="$DLOG repair issues ($get_repair_failed) "
 fi
 
 # if [[ $audit_difference -gt 1 ]]; then
@@ -1007,11 +1021,11 @@ fi
 # fi
 
 if [[ $temp_severe_errors -ne 0 ]]; then
-	DLOG="$DLOG severe issues ($temp_severe_errors)"
+	DLOG="$DLOG severe issues ($temp_severe_errors) "
 fi
 
 if [[ $tmp_fatal_errors -ne 0 ]]; then
-	DLOG="$DLOG fatal issues ($tmp_fatal_errors)"
+	DLOG="$DLOG fatal issues ($tmp_fatal_errors) "
 fi
 
 if [[ $tmp_rest_of_errors -ne 0 ]]; then
@@ -1154,21 +1168,24 @@ if [[ "$tmp_auditTimeLagsFilled" == "true" ]]; then
 	[[ "$VERBOSE" == "true" ]] && echo " *** audit time lag warning mail sent."
 fi
 if [[ $tmp_fatal_errors -ne 0 ]]; then 
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : FATAL ERRORS FOUND" --body "$FATS" --silent "1"
+	echo "$FATS" > tmp.txt && zip tmp.zip tmp.txt 
+	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : FATAL ERRORS FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** fatal error mail sent."
 fi
 if [[ $temp_severe_errors -ne 0 ]]; then 
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : SEVERE ERRORS FOUND" --body "$SEVERE" --silent "1"
+    echo "$SEVERE" > tmp.txt && zip tmp.zip tmp.txt 
+	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : SEVERE ERRORS FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** severe error mail sent."
 fi
 if [[ $tmp_rest_of_errors -ne 0 ]]; then
+    echo "$ERRS" > tmp.txt && zip tmp.zip tmp.txt 
 	if [[ "$ignore_rest_of_errors" == "true" ]]; then
 		if [[ "$SENDPUSH" == "true" ]]; then
-			swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : OTHER ERRORS FOUND" --body "$ERRS" --silent "1"
+			swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : OTHER ERRORS FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
 			[[ "$VERBOSE" == "true" ]] && echo " *** general error mail sent (ignore case: $ignore_rest_of_errors)."
 		fi
-	else
-		swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : OTHER ERRORS FOUND" --body "$ERRS" --silent "1"
+	else 
+		swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : OTHER ERRORS FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
 		[[ "$VERBOSE" == "true" ]] && echo " *** general error mail sent (ignore case: $ignore_rest_of_errors)."
 	fi
 fi
@@ -1184,7 +1201,8 @@ fi
 # 	fi
 # fi
 if [[ $tmp_reps_failed -ne 0 ]]; then 
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : REPAIR FAILURES FOUND" --body "$get_repair_failed_text" --silent "1"
+    echo "$DREPS" > tmp.txt && zip tmp.zip tmp.txt  
+	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : REPAIR FAILURES FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** repair failures mail sent."
 fi
 
