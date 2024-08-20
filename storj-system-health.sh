@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# v1.11.2
+# v1.11.3
 #
 # storj-system-health.sh - storagenode health checks and notifications to discord / by email
 # by dusselmann, https://github.com/dusselmann/storj-system-health.sh
@@ -536,7 +536,7 @@ audit_difference=0
 AUDS="$(echo "$LOG1H" 2>&1 \
     | grep -E 'GET_AUDIT' \
     | grep 'failed' \
-    | grep -v -e 'connection timed out' -e 'connection reset by peer')"
+    | grep -v -e 'connection timed out' -e 'connection reset by peer' -e 'use of closed network connection' -e 'broken pipe')"
 
 FATS="$(echo "$LOG1H" 2>&1 \
     | grep '[[:blank:]]*FATAL' \
@@ -544,12 +544,12 @@ FATS="$(echo "$LOG1H" 2>&1 \
 
 ERRS="$(echo "$LOG1H" 2>&1 \
     | grep '[[:blank:]]*ERROR' \
-    | grep -v -e '[[:blank:]]*INFO' -e '[[:blank:]]*WARN' -e '[[:blank:]]*FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity' -e 'connection reset by peer' -e 'context canceled' -e 'tcp connector failed' -e 'node rate limited by id' -e 'manager closed: read tcp' -e 'connection timed out')"
+    | grep -v -e '[[:blank:]]*INFO' -e '[[:blank:]]*WARN' -e '[[:blank:]]*FATAL' -e 'collector' -e 'piecestore' -e 'pieces error: filestore error: context canceled' -e 'piecedeleter' -e 'emptying trash failed' -e 'service ping satellite failed' -e 'timeout: no recent network activity' -e 'connection reset by peer' -e 'context canceled' -e 'tcp connector failed' -e 'node rate limited by id' -e 'manager closed: read tcp' -e 'connection timed out' -e 'connection reset by peer' -e 'use of closed network connection' -e 'broken pipe')"
 
 DREPS="$(echo "$LOG1H" 2>&1 \
     | grep -E 'GET_REPAIR' \
     | grep 'failed' \
-    | grep -v -e 'connection timed out' -e 'connection reset by peer')"
+    | grep -v -e 'connection timed out' -e 'connection reset by peer' -e 'use of closed network connection' -e 'broken pipe')"
     
 
 # added "severe" errors in order to recognize e.g. docker issues, connectivity issues etc.
@@ -1013,7 +1013,7 @@ if [[ $tmp_audits_failed -ne 0 ]]; then
 fi
 
 if [[ $tmp_reps_failed -ne 0 ]]; then
-	DLOG="$DLOG repair issues ($get_repair_failed) "
+	DLOG="$DLOG repair issues ($tmp_reps_failed) "
 fi
 
 # if [[ $audit_difference -gt 1 ]]; then
