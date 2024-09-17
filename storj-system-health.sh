@@ -238,7 +238,10 @@ else
         echo "         Script has been stopped."
         exit 2
     fi
-    
+
+
+
+
     # quality checks
     [[ ${#MOUNTPOINTS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and MOUNTPOINTS do not match in .credo" && exit 2
     [[ ${#NODEURLS[@]} -ne ${#NODES[@]} ]] && echo "failure: number of NODES and NODEURLS do not match in .credo" && exit 2
@@ -305,6 +308,44 @@ then
     # swaks exists and runs ok
 fi
 
+
+# Set swaks paremeters for mail sending
+
+if [[ "$MAILON" == "true" ]]
+then 
+    SWAKSCMD="swaks --from $MAILFROM --to $MAILTO --server $MAILSERVER --auth LOGIN --auth-user $MAILUSER --auth-password $MAILPASS "
+
+    # Append mail encryption parameters if set
+    if [ ! -z "$MAILENCRYPT" ]; then
+        case "$MAILENCRYPT" in
+        "TLS")
+            SWAKSCMD+="-tls "
+            ;;
+        "TLS-optional")
+            SWAKSCMD+="-tlso "
+            ;;
+        "TLS-optional-strict")
+            SWAKSCMD+="-tlsos "
+            ;;
+        "TLS-on-connect")
+            SWAKSCMD+="--tlsc "
+            ;;
+        *)
+            echo "fatal: invalid MAILENCRYPT value. Valid values are TLS, TLS-optional, TLS-optional-strict, TLS-on-connect" && exit 2
+            ;;
+        esac
+    fi
+
+    # Append mail port parameters if set
+    if [ ! -z "$MAILPORT" ]; then
+        SWAKSCMD+="--port $MAILPORT "
+    fi
+    
+    # Echo mail command for troubleshooting
+    if [[ "$VERBOSE" == "true" ]]; then
+        echo " *** Sending mail using command: $SWAKSCMD"
+    fi
+fi
 
 # =============================================================================
 # START SCRIPT PROCESSING
@@ -1155,60 +1196,61 @@ fi
 # SEND EMAIL ALERTS WITH ERROR DETAILS (and debug mail to verify mail works)
 # ------------------------------------
 
+
 # send email alerts
 if [[ "$MAILON" == "true" ]] && [[ "$current_earnings_only" == "false" ]]; then
 
 if [ ! -z "$satellite_scores" ] && [[ "$satellite_notification" == "true" ]]; then
-    swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : SATELLITE SCORES BELOW THRESHOLD" --body "$satellite_scores" --silent "1"
+    $SWAKSCMD --h-Subject "$NODE : SATELLITE SCORES BELOW THRESHOLD" --body "$satellite_scores" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** satellite warning mail sent."
 fi
 
 if [[ "$tmp_auditTimeLagsFilled" == "true" ]]; then 
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : AUDIT TIME LAGS FOUND > risk of being disqualified" --body "risk of being disqualified!! \n\n$tmp_auditTimeLags" --silent "1"
+	$SWAKSCMD --h-Subject "$NODE : AUDIT TIME LAGS FOUND > risk of being disqualified" --body "risk of being disqualified!! \n\n$tmp_auditTimeLags" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** audit time lag warning mail sent."
 fi
 if [[ $tmp_fatal_errors -ne 0 ]]; then 
 	echo "$FATS" > tmp.txt && zip tmp.zip tmp.txt 
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : FATAL ERRORS FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
+	$SWAKSCMD --h-Subject "$NODE : FATAL ERRORS FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** fatal error mail sent."
 fi
 if [[ $temp_severe_errors -ne 0 ]]; then 
     echo "$SEVERE" > tmp.txt && zip tmp.zip tmp.txt 
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : SEVERE ERRORS FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
+	$SWAKSCMD --h-Subject "$NODE : SEVERE ERRORS FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** severe error mail sent."
 fi
 if [[ $tmp_rest_of_errors -ne 0 ]]; then
     echo "$ERRS" > tmp.txt && zip tmp.zip tmp.txt 
 	if [[ "$ignore_rest_of_errors" == "true" ]]; then
 		if [[ "$SENDPUSH" == "true" ]]; then
-			swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : OTHER ERRORS FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
+			$SWAKSCMD --h-Subject "$NODE : OTHER ERRORS FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
 			[[ "$VERBOSE" == "true" ]] && echo " *** general error mail sent (ignore case: $ignore_rest_of_errors)."
 		fi
 	else 
-		swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : OTHER ERRORS FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
+		$SWAKSCMD --h-Subject "$NODE : OTHER ERRORS FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
 		[[ "$VERBOSE" == "true" ]] && echo " *** general error mail sent (ignore case: $ignore_rest_of_errors)."
 	fi
 fi
 if [[ $tmp_audits_failed -ne 0 ]]; then 
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : AUDIT ERRORS FOUND" --body "Recoverable: $audit_failed_warn / $audit_recfailrate \n\n$audit_failed_warn_text \n\nCritical: $audit_failed_crit / $audit_failrate \n\n$audit_failed_crit_text" --silent "1"
+	$SWAKSCMD --h-Subject "$NODE : AUDIT ERRORS FOUND" --body "Recoverable: $audit_failed_warn / $audit_recfailrate \n\n$audit_failed_warn_text \n\nCritical: $audit_failed_crit / $audit_failrate \n\n$audit_failed_crit_text" --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** audit error mail sent."
 fi
 # if [[ "$audit_difference_repeat" == "false" ]]; then
     # only alert when there is a) just one or b) the first run done of the "audit pending loop"
 #     if [[ $audit_difference -gt 0 ]]; then 
-# 	    swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : AUDIT WARNING - pending audits" --body "Warning: there are $audit_difference pending audits, which have not yet been finished." --silent "1"
+# 	    $SWAKSCMD --h-Subject "$NODE : AUDIT WARNING - pending audits" --body "Warning: there are $audit_difference pending audits, which have not yet been finished." --silent "1"
 # 	    [[ "$VERBOSE" == "true" ]] && echo " *** pending audit warning mail sent."
 # 	fi
 # fi
 if [[ $tmp_reps_failed -ne 0 ]]; then 
     echo "$DREPS" > tmp.txt && zip tmp.zip tmp.txt  
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : REPAIR FAILURES FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
+	$SWAKSCMD --h-Subject "$NODE : REPAIR FAILURES FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** repair failures mail sent."
 fi
 
 # send debug mail 
 if [[ "$SENDMAIL" == "true" ]]; then
-	swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : DEBUG TEST MAIL" --body "blobb." --silent "1"
+	$SWAKSCMD --h-Subject "$NODE : DEBUG TEST MAIL" --body "blobb." --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** debug mail sent."
 fi
 
@@ -1224,7 +1266,7 @@ else
 	    cd $DIR
 	    { ./discord.sh --webhook-url="$DISCORDURL" --username "storj stats" --text "**warning :** $NODE not running!"; } 2>/dev/null
 	fi
-	#swaks --from "$MAILFROM" --to "$MAILTO" --server "$MAILSERVER" --auth LOGIN --auth-user "$MAILUSER" --auth-password "$MAILPASS" --h-Subject "$NODE : NOT RUNNING" --body "warning: storage node is not running." --silent "1"
+	#$SWAKSCMD --h-Subject "$NODE : NOT RUNNING" --body "warning: storage node is not running." --silent "1"
 fi
 
 
