@@ -68,6 +68,8 @@ MAILTO=""               # your "to:" mail address
 MAILSERVER=""           # your smtp server address
 MAILUSER=""             # your user name from smtp server
 MAILPASS=""             # your password from smtp server
+MAILPORT=""             # OPTIONAL smtp server port to be used 
+MAILENCRYPT=""          # OPTIONAL encryption method to be used. Valid values are TLS, TLS-optional, TLS-optional-strict, TLS-on-connect. 
 
 ## alerting settings
 SATPINGFREQ=3600        # in case satellite scores are below threshold, 
