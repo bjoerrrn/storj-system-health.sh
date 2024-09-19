@@ -1211,23 +1211,23 @@ if [[ "$tmp_auditTimeLagsFilled" == "true" ]]; then
 fi
 if [[ $tmp_fatal_errors -ne 0 ]]; then 
 	echo "$FATS" > tmp.txt && zip tmp.zip tmp.txt 
-	$SWAKSCMD --h-Subject "$NODE : FATAL ERRORS FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
+	$SWAKSCMD --h-Subject "$NODE : FATAL ERRORS FOUND" --body "see attachment" --attach-name=storj_errors.zip --attach @./tmp.zip --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** fatal error mail sent."
 fi
 if [[ $temp_severe_errors -ne 0 ]]; then 
     echo "$SEVERE" > tmp.txt && zip tmp.zip tmp.txt 
-	$SWAKSCMD --h-Subject "$NODE : SEVERE ERRORS FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
+	$SWAKSCMD --h-Subject "$NODE : SEVERE ERRORS FOUND" --body "see attachment" --attach-name=storj_errors.zip --attach @./tmp.zip --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** severe error mail sent."
 fi
 if [[ $tmp_rest_of_errors -ne 0 ]]; then
     echo "$ERRS" > tmp.txt && zip tmp.zip tmp.txt 
 	if [[ "$ignore_rest_of_errors" == "true" ]]; then
 		if [[ "$SENDPUSH" == "true" ]]; then
-			$SWAKSCMD --h-Subject "$NODE : OTHER ERRORS FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
+			$SWAKSCMD --h-Subject "$NODE : OTHER ERRORS FOUND" --body "see attachment" --attach-name=storj_errors.zip --attach @./tmp.zip --silent "1"
 			[[ "$VERBOSE" == "true" ]] && echo " *** general error mail sent (ignore case: $ignore_rest_of_errors)."
 		fi
 	else 
-		$SWAKSCMD --h-Subject "$NODE : OTHER ERRORS FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
+		$SWAKSCMD --h-Subject "$NODE : OTHER ERRORS FOUND" --body "see attachment" --attach-name=storj_errors.zip --attach @./tmp.zip --silent "1"
 		[[ "$VERBOSE" == "true" ]] && echo " *** general error mail sent (ignore case: $ignore_rest_of_errors)."
 	fi
 fi
@@ -1244,7 +1244,7 @@ fi
 # fi
 if [[ $tmp_reps_failed -ne 0 ]]; then 
     echo "$DREPS" > tmp.txt && zip tmp.zip tmp.txt  
-	$SWAKSCMD --h-Subject "$NODE : REPAIR FAILURES FOUND" --body "see attachment" --attach ./tmp.zip --silent "1"
+	$SWAKSCMD --h-Subject "$NODE : REPAIR FAILURES FOUND" --body "see attachment" --attach-name=storj_repair_failures.zip --attach @./tmp.zip --silent "1"
 	[[ "$VERBOSE" == "true" ]] && echo " *** repair failures mail sent."
 fi
 
